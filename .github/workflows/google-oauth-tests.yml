@@ -1,0 +1,83 @@
+name: Google OAuth Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/app/auth/**"
+      - "src/components/auth/**"
+      - "src/lib/auth/**"
+      - "src/tests/auth/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "src/app/auth/**"
+      - "src/components/auth/**"
+      - "src/lib/auth/**"
+      - "src/tests/auth/**"
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Google OAuth Integration
+    runs-on: ubuntu-latest
+
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      # We don't include actual Google credentials for automated tests
+      # as they would require real user interaction
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start application in background
+        run: |
+          npm run start &
+          # Wait for the app to be ready
+          sleep 10
+
+      - name: Run Google OAuth tests
+        run: npx playwright test src/tests/auth/google-oauth.test.ts
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+  # This job is a placeholder for more comprehensive tests that would
+  # require actual Google credentials and user interaction
+  manual-tests:
+    name: Manual Google OAuth Tests
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Manual testing instructions
+        run: |
+          echo "For complete end-to-end testing with actual Google authentication:"
+          echo "1. Create a test Google account specifically for automated testing"
+          echo "2. Set up environment variables for test credentials"
+          echo "3. Uncomment and modify the 'Can sign in with Google' test"
+          echo "4. Run the tests manually on a secure environment"
