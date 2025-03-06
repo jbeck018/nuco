@@ -6,7 +6,6 @@ import { users } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { getUserByEmail } from "@/lib/auth/data";
 import { createOrganization } from "@/lib/organizations/service";
-import { slugify } from "@/lib/utils";
 
 // Define the signup request schema
 const signupSchema = z.object({

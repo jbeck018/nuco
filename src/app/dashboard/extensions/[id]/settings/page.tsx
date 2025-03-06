@@ -16,7 +16,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DashboardHeader } from "@/components/dashboard/header";
-import { DashboardShell } from "@/components/dashboard/shell";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 interface ExtensionSetting {
   type: string;

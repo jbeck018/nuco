@@ -22,9 +22,15 @@ const redis = (redisUrl && redisToken)
 // Create a mock rate limiter for development if Redis is not configured
 const createRateLimiter = (windowSize: number, windowDuration: string, prefix: string) => {
   if (redis) {
+    // Parse the duration string to get the value and unit
+    const value = parseInt(windowDuration.slice(0, -1));
+    const unit = windowDuration.slice(-1);
+    
+    // Create the rate limiter with the appropriate configuration
     return new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(windowSize, windowDuration),
+      // Use fixed window instead of sliding window to avoid type issues
+      limiter: Ratelimit.fixedWindow(windowSize, unit === 'm' ? `${value} m` : unit === 'h' ? `${value} h` : unit === 'd' ? `${value} d` : `${value} s`),
       analytics: true,
       prefix,
     });
@@ -55,7 +61,7 @@ const createRateLimiter = (windowSize: number, windowDuration: string, prefix: s
 
 // Create rate limiters with different configurations
 const globalRatelimit = createRateLimiter(100, '1m', 'ratelimit:global'); // 100 requests per minute
-const authRatelimit = createRateLimiter(10, '1m', 'ratelimit:auth'); // 10 requests per minute for auth endpoints
+const authRatelimit = createRateLimiter(30, '1m', 'ratelimit:auth'); // 30 requests per minute for auth endpoints
 const apiRatelimit = createRateLimiter(50, '1m', 'ratelimit:api'); // 50 requests per minute for API endpoints
 
 /**
@@ -77,6 +83,15 @@ export async function rateLimit(req: NextRequest): Promise<NextResponse | undefi
     req.nextUrl.pathname.startsWith('/_next') ||
     req.nextUrl.pathname.startsWith('/static') ||
     req.nextUrl.pathname.startsWith('/favicon.ico')
+  ) {
+    return undefined;
+  }
+  
+  // Skip rate limiting for session endpoints
+  // TODO: Implement caching for session endpoints to improve performance
+  if (
+    req.nextUrl.pathname.startsWith('/api/auth/session') || 
+    req.nextUrl.pathname.includes('/session')
   ) {
     return undefined;
   }

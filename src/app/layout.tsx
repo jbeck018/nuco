@@ -10,6 +10,7 @@ import { TRPCProvider } from "@/lib/trpc/trpc";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { AppRouter } from "@/lib/trpc/router";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -84,6 +85,12 @@ export default function RootLayout({
   // Use state to ensure consistent references during rendering
   const [queryClient] = useState(() => getQueryClient());
   const [trpcClient] = useState(() => getTrpcClient());
+  const pathname = usePathname();
+  
+  const isDashboardRoute = pathname.startsWith('/dashboard') || 
+                          pathname.startsWith('/chat') || 
+                          pathname.startsWith('/settings') || 
+                          pathname.startsWith('/integrations');
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -97,39 +104,43 @@ export default function RootLayout({
           <SessionProvider>
             <QueryClientProvider client={queryClient}>
               <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-                <div className="flex min-h-screen flex-col">
-                  <MainNav />
-                  <main className="flex-1">{children}</main>
-                  <footer className="border-t py-6">
-                    <div className="container mx-auto px-4">
-                      <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-                        <p className="text-center text-sm text-muted-foreground">
-                          &copy; {new Date().getFullYear()} Nuco. All rights reserved.
-                        </p>
-                        <div className="flex items-center space-x-4">
-                          <a
-                            href="#"
-                            className="text-sm text-muted-foreground hover:underline"
-                          >
-                            Terms
-                          </a>
-                          <a
-                            href="#"
-                            className="text-sm text-muted-foreground hover:underline"
-                          >
-                            Privacy
-                          </a>
-                          <a
-                            href="#"
-                            className="text-sm text-muted-foreground hover:underline"
-                          >
-                            Contact
-                          </a>
+                <MainNav>
+                  {!isDashboardRoute && (
+                    <div className="flex min-h-screen flex-col">
+                      <main className="flex-1">{children}</main>
+                      <footer className="border-t py-6">
+                        <div className="container mx-auto px-4">
+                          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+                            <p className="text-center text-sm text-muted-foreground">
+                              &copy; {new Date().getFullYear()} Nuco. All rights reserved.
+                            </p>
+                            <div className="flex items-center space-x-4">
+                              <a
+                                href="#"
+                                className="text-sm text-muted-foreground hover:underline"
+                              >
+                                Terms
+                              </a>
+                              <a
+                                href="#"
+                                className="text-sm text-muted-foreground hover:underline"
+                              >
+                                Privacy
+                              </a>
+                              <a
+                                href="#"
+                                className="text-sm text-muted-foreground hover:underline"
+                              >
+                                Contact
+                              </a>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      </footer>
                     </div>
-                  </footer>
-                </div>
+                  )}
+                  {isDashboardRoute && children}
+                </MainNav>
                 <Toaster />
               </TRPCProvider>
             </QueryClientProvider>

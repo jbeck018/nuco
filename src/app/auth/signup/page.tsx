@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -119,33 +120,20 @@ export default function SignupPage() {
     }
   }
 
-  // Handle OAuth sign-in
+  // Handle OAuth sign-in using NextAuth
   const handleOAuthSignIn = async (provider: string) => {
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // Redirect to the OAuth provider
-      const response = await fetch(`/api/auth/oauth/${provider}`, {
-        method: "GET",
+      setIsLoading(true);
+      setError(null);
+      
+      // Use NextAuth's signIn function with the correct parameters for NextAuth v5
+      await signIn(provider, { 
+        callbackUrl: '/auth/complete-signup',
+        redirect: true
       });
-      
-      const data = await response.json();
-      
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("Failed to initiate OAuth flow");
-      }
     } catch (error) {
-      console.error(`${provider} OAuth error:`, error);
-      setError(error instanceof Error ? error.message : `Failed to sign in with ${provider}`);
-      
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error instanceof Error ? error.message : `Failed to sign in with ${provider}`,
-      });
+      console.error('OAuth sign-in error:', error);
+      setError('Failed to authenticate with provider');
       setIsLoading(false);
     }
   };

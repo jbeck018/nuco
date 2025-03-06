@@ -7,7 +7,7 @@
 
 import { Metadata } from 'next';
 import { ContextAwareAI, Message } from '@/components/ai/ContextAwareAI';
-import { DashboardShell } from '@/components/dashboard/shell';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // Get the Iron Session for CSRF protection
-    const ironSession = await getSession(request);
+    const ironSession = await getSession();
     
     // Generate a state parameter to prevent CSRF attacks
     const state = nanoid();

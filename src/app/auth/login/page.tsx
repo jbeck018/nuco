@@ -85,9 +85,20 @@ export default function LoginPage() {
   }
 
   // Handle OAuth sign in
-  const handleOAuthSignIn = (provider: string) => {
-    setIsLoading(true);
-    signIn(provider, { callbackUrl });
+  const handleOAuthSignIn = async (provider: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Use NextAuth's signIn function with the correct parameters for NextAuth v5
+      await signIn(provider, { 
+        callbackUrl,
+        redirect: true
+      });
+    } catch (error) {
+      console.error('OAuth sign-in error:', error);
+      setError('Failed to authenticate with provider');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -199,7 +210,7 @@ export default function LoginPage() {
 
         <div className="text-center mt-6">
           <p className="text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
+            Don&apos;t have an account? {" "}
             <Link
               href="/auth/signup"
               className="font-medium text-primary hover:underline"

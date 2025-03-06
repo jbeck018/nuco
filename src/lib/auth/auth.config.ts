@@ -73,7 +73,7 @@ export const authConfig: NextAuthConfig = {
       
       return true;
     },
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account }) {
       // Add user role to the token
       if (user) {
         token.role = user.role;
@@ -87,27 +87,13 @@ export const authConfig: NextAuthConfig = {
         token.provider = account.provider;
         
         // For OAuth sign-ins, check if the user has an organization
-        // If not, create one for them
+        // We'll now handle organization creation in the complete-signup page
         if (token.id) {
           try {
             const organizations = await getUserOrganizations(token.id as string);
             
-            // If user has no organizations, create one
-            if (organizations.length === 0 && profile?.name) {
-              const orgName = `${profile.name}'s Organization`;
-              const email = profile.email || user?.email || '';
-              
-              const org = await createOrganization({
-                name: orgName,
-                userId: token.id as string,
-                billingEmail: email,
-              });
-              
-              if (org) {
-                token.defaultOrganizationId = org.id;
-              }
-            } else if (organizations.length > 0 && !token.defaultOrganizationId) {
-              // If user has organizations but no default, set the first one as default
+            // If user has organizations but no default, set the first one as default
+            if (organizations.length > 0 && !token.defaultOrganizationId) {
               token.defaultOrganizationId = organizations[0].id;
             }
           } catch (error) {

@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { DashboardHeader } from "@/components/dashboard/header";
-import { DashboardShell } from "@/components/dashboard/shell";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { EmptyPlaceholder } from "@/components/dashboard/empty-placeholder";
 
 interface MarketplaceExtension {

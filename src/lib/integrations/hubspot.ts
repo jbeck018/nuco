@@ -103,7 +103,9 @@ export class HubSpotIntegration extends OAuth2Integration {
       clientId: config?.clientId || process.env.HUBSPOT_CLIENT_ID || '',
       clientSecret: config?.clientSecret || process.env.HUBSPOT_CLIENT_SECRET || '',
       redirectUri: config?.redirectUri || `${process.env.NEXTAUTH_URL}/api/integrations/hubspot/callback`,
-      scopes: config?.scopes || ['contacts', 'crm.objects.contacts.read', 'crm.objects.companies.read', 'crm.objects.deals.read'],
+      scopes: config?.scopes || [
+        'oauth',
+      ],
       authorizationUrl: 'https://app.hubspot.com/oauth/authorize',
       tokenUrl: 'https://api.hubapi.com/oauth/v1/token',
     });
