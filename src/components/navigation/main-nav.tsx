@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { 
   Menu, X, Home, MessageSquare, Settings, LogOut, 
@@ -30,7 +30,8 @@ export function MainNav({ children }: MainNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
-  const { status } = useSession();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const { toast } = useToast();
   
   const isAuthenticated = status === "authenticated";
@@ -38,6 +39,15 @@ export function MainNav({ children }: MainNavProps) {
                           pathname.startsWith('/chat') || 
                           pathname.startsWith('/settings') || 
                           pathname.startsWith('/integrations');
+  
+  // Redirect unauthenticated users from dashboard routes to login
+  useEffect(() => {
+    if (isDashboardRoute && status === "unauthenticated") {
+      console.log("Redirecting unauthenticated user from protected route:", pathname);
+      const callbackUrl = encodeURIComponent(pathname);
+      router.push(`/auth/login?callbackUrl=${callbackUrl}`);
+    }
+  }, [isDashboardRoute, status, pathname, router]);
   
   // Set sidebar state based on screen size
   useEffect(() => {
@@ -133,6 +143,9 @@ export function MainNav({ children }: MainNavProps) {
         title: "Signed out successfully",
         description: "You have been signed out of your account.",
       });
+      
+      // Redirect to home page after sign out
+      router.push('/');
     } catch (error) {
       console.error("Sign out error:", error);
       toast({
@@ -142,6 +155,18 @@ export function MainNav({ children }: MainNavProps) {
       });
     }
   };
+  
+  // Show loading state while checking authentication
+  if (isDashboardRoute && status === "loading") {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  // Redirect unauthenticated users from dashboard routes
+  if (isDashboardRoute && !isAuthenticated && status !== "loading") {
+    // This is a fallback in case the useEffect redirect doesn't work
+    // It will render nothing briefly before the router.push in useEffect takes effect
+    return null;
+  }
   
   // Render sidebar for dashboard routes
   if (isDashboardRoute && isAuthenticated) {

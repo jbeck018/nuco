@@ -45,6 +45,8 @@ export async function middleware(request: NextRequest) {
   const user = await getUserFromRequest(request);
   const pathname = request.nextUrl.pathname;
   
+  console.log(`Middleware processing: ${pathname}, User authenticated: ${!!user}`);
+  
   // Apply rate limiting
   const rateLimitResponse = await rateLimit(request);
   if (rateLimitResponse) {
@@ -89,6 +91,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/org') ||
     pathname.startsWith('/settings')
   )) {
+    console.log(`Redirecting unauthenticated user from ${pathname} to login page`);
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(url);
@@ -112,6 +115,7 @@ export async function middleware(request: NextRequest) {
   
   // If the route is protected and the user is not authenticated, redirect to login
   if (isProtectedRoute && !user) {
+    console.log(`Protected route check: Redirecting from ${pathname} to login page`);
     const url = new URL("/auth/login", request.url);
     url.searchParams.set("callbackUrl", encodeURI(pathname));
     return NextResponse.redirect(url);
