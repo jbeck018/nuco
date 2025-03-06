@@ -9,6 +9,7 @@ import { Menu, X, Home, MessageSquare, Settings, LogOut, Layers, Key, Code, File
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface NavItem {
   title: string;
@@ -130,6 +131,8 @@ export function MainNav() {
             </Link>
           ))}
           
+          <ThemeToggle />
+          
           {isAuthenticated ? (
             <Button
               variant="ghost"
@@ -152,7 +155,8 @@ export function MainNav() {
         </div>
         
         {/* Mobile Menu Button */}
-        <div className="flex md:hidden">
+        <div className="flex md:hidden items-center space-x-2">
+          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"

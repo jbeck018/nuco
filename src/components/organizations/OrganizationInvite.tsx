@@ -1,9 +1,8 @@
-"use client";
-
-import { useState, useEffect } from "react";
+"use client";;
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { trpc } from "@/lib/trpc/client";
+import { useTRPC } from "@/lib/trpc/trpc";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+
+import { useMutation } from "@tanstack/react-query";
 
 interface OrganizationInviteProps {
   inviteId: string;
@@ -29,6 +30,7 @@ export function OrganizationInvite({
   organizationName,
   inviterName,
 }: OrganizationInviteProps) {
+  const trpc = useTRPC();
   const [isLoading, setIsLoading] = useState(false);
   const [isAccepted, setIsAccepted] = useState(false);
   const [isDeclined, setIsDeclined] = useState(false);
@@ -36,7 +38,7 @@ export function OrganizationInvite({
   const { data: session } = useSession();
   const { toast } = useToast();
 
-  const acceptInviteMutation = trpc.organization.acceptInvite.useMutation({
+  const acceptInviteMutation = useMutation(trpc.organization.acceptInvite.mutationOptions({
     onSuccess: () => {
       setIsAccepted(true);
       toast({
@@ -58,9 +60,9 @@ export function OrganizationInvite({
       });
       setIsLoading(false);
     },
-  });
+  }));
 
-  const declineInviteMutation = trpc.organization.declineInvite.useMutation({
+  const declineInviteMutation = useMutation(trpc.organization.declineInvite.mutationOptions({
     onSuccess: () => {
       setIsDeclined(true);
       toast({
@@ -82,7 +84,7 @@ export function OrganizationInvite({
       });
       setIsLoading(false);
     },
-  });
+  }));
 
   const handleAccept = () => {
     if (!session?.user) {

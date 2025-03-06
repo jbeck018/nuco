@@ -53,7 +53,7 @@ export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/auth/login",
     // Use newUser instead of signUp as per NextAuth v5 API
-    newUser: "/auth/register",
+    newUser: "/auth/signup",
     error: "/auth/error",
     verifyRequest: "/auth/verify",
   },

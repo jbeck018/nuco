@@ -100,10 +100,18 @@ export interface SlackSettings {
   webhookUrl?: string;
 }
 
+/**
+ * Enhanced AI settings interface for both organization and user-level preferences
+ */
 export interface AiSettings {
-  defaultModel?: string;
-  maxTokensPerRequest?: number;
-  promptTemplates?: Array<{ id: string; name: string; isDefault?: boolean }>;
+  defaultModel: string;
+  maxTokensPerRequest: number;
+  promptTemplates: Array<{ id: string; name: string; isDefault?: boolean }>;
+  contextSettings?: {
+    includeUserHistory: boolean;
+    includeOrganizationData: boolean;
+    contextWindowSize: number;
+  };
 }
 
 /**
@@ -224,13 +232,18 @@ export const insertOrganizationSettingsSchema = z.object({
     webhookUrl: z.string().optional(),
   }).optional().nullable(),
   aiSettings: z.object({
-    defaultModel: z.string().optional(),
-    maxTokensPerRequest: z.number().optional(),
+    defaultModel: z.string(),
+    maxTokensPerRequest: z.number(),
     promptTemplates: z.array(z.object({
       id: z.string(),
       name: z.string(),
       isDefault: z.boolean().optional(),
-    })).optional(),
+    })),
+    contextSettings: z.object({
+      includeUserHistory: z.boolean(),
+      includeOrganizationData: z.boolean(),
+      contextWindowSize: z.number(),
+    }).optional(),
   }).optional().nullable(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
@@ -279,4 +292,25 @@ export type OrganizationSettings = typeof organizationSettings.$inferSelect;
 export type NewOrganizationSettings = typeof organizationSettings.$inferInsert;
 
 export type IntegrationSettings = typeof integrationSettings.$inferSelect;
-export type NewIntegrationSettings = typeof integrationSettings.$inferInsert; 
+export type NewIntegrationSettings = typeof integrationSettings.$inferInsert;
+
+// Metadata key schema for the flexible metadata system
+export const metadataKeySchema = z.enum([
+  'userPreferences',
+  'organizationSettings',
+  'aiSettings',
+  'integrationSettings'
+]);
+
+export type MetadataKey = z.infer<typeof metadataKeySchema>;
+
+// Base schema for all metadata entries in the flexible system
+export const metadataSchema = z.object({
+  id: z.string(),
+  userId: z.string().optional(),
+  organizationId: z.string().optional(),
+  key: metadataKeySchema,
+  value: z.any(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});

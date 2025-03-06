@@ -3,6 +3,7 @@
  * 
  * This component provides a complete chat interface with messages and input.
  * It handles message history, streaming responses, and scrolling behavior.
+ * Now enhanced with context-aware prompting based on user preferences.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -13,8 +14,20 @@ import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { Button } from '@/components/ui/button';
 import { PlusIcon } from 'lucide-react';
-import { trpc } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/client';
 import { generateCompletion } from '@/lib/ai/service';
+import { useAiPreferences } from '@/hooks/useAiPreferences';
+import { applyContextAwarePrompting } from '@/lib/ai/context-aware';
+import { streamToString } from '@/lib/utils';
+import { 
+  getDefaultModel, 
+  getMaxTokens, 
+  getContextSettings,
+  applyContextSettings
+} from '@/lib/utils/ai-utils';
+
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 export interface Message {
   id: string;
@@ -34,17 +47,21 @@ export function ChatInterface({
   initialMessages = [],
   onNewConversation,
 }: ChatInterfaceProps) {
+  const trpc = useTRPC();
   const { toast } = useToast();
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
-  
-  const utils = trpc.useUtils();
-  const addMessageMutation = trpc.ai.addMessage.useMutation({
+
+  // Get AI preferences from the hook
+  const { preferences: aiPreferences } = useAiPreferences();
+
+  const queryClient = useQueryClient();
+  const addMessageMutation = useMutation(trpc.ai.addMessage.mutationOptions({
     onSuccess: () => {
-      utils.ai.getConversation.invalidate({ id: conversationId });
+      queryClient.invalidateQueries(trpc.ai.getConversation.queryFilter({ id: conversationId }));
     },
     onError: (error) => {
       toast({
@@ -53,7 +70,7 @@ export function ChatInterface({
         variant: 'destructive',
       });
     },
-  });
+  }));
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -83,62 +100,85 @@ export function ChatInterface({
         content,
       });
       
-      // Start streaming the AI response
+      // Initialize streaming for AI response
       setStreamingMessage('');
       
-      const response = await generateCompletion({
-        messages: messages.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-        })),
+      // Prepare conversation history for context
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        id: msg.id,
+        createdAt: new Date(msg.createdAt)
+      }));
+      
+      // Get context settings from AI preferences
+      const contextSettings = getContextSettings(aiPreferences);
+      
+      // Apply context-aware prompting with enhanced context
+      const contextAwareMessages = applyContextAwarePrompting({
+        userPrompt: content,
         systemPrompt: 'You are a helpful AI assistant.',
+        aiSettings: aiPreferences,
+        contextData: {
+          userConversationHistory: conversationHistory,
+          contextSettings: contextSettings,
+          // Add user data if available
+          userData: {
+            role: 'user', // This would come from user profile in a real app
+            preferences: {
+              responseStyle: 'concise', // Example preference
+            }
+          }
+          // Organization data would be added here in a full implementation
+        }
       });
+      
+      // Start generating the AI response with context-aware prompting
+      const response = await generateCompletion(
+        contextAwareMessages,
+        {
+          modelId: getDefaultModel(aiPreferences),
+          maxTokens: getMaxTokens(aiPreferences)
+        }
+      );
       
       if (!response) {
         throw new Error('Failed to generate completion');
       }
       
-      const reader = response.getReader();
-      const decoder = new TextDecoder();
-      
-      let done = false;
-      let accumulatedResponse = '';
-      
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        
-        if (value) {
-          const chunkText = decoder.decode(value);
-          accumulatedResponse += chunkText;
-          setStreamingMessage(accumulatedResponse);
-        }
-      }
-      
-      // Save assistant message to database
-      if (accumulatedResponse) {
-        await addMessageMutation.mutateAsync({
-          conversationId,
-          role: 'assistant',
-          content: accumulatedResponse,
+      // Process the streaming response
+      try {
+        // Use streamToString utility to handle the streaming
+        await streamToString(response, (chunk) => {
+          setStreamingMessage(prev => prev + chunk);
         });
         
-        // Add assistant message to UI
+        // After streaming is complete, add the message to the UI and save to DB
         const assistantMessage: Message = {
           id: uuidv4(),
           role: 'assistant',
-          content: accumulatedResponse,
+          content: streamingMessage,
           createdAt: new Date().toISOString(),
         };
         
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages(prev => [...prev, assistantMessage]);
         setStreamingMessage('');
+        
+        // Save assistant message to database
+        await addMessageMutation.mutateAsync({
+          conversationId,
+          role: 'assistant',
+          content: assistantMessage.content,
+        });
+      } catch (streamError) {
+        console.error('Error processing stream:', streamError);
+        throw new Error('Failed to process AI response stream');
       }
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to process message',
+        description: error instanceof Error ? error.message : 'Failed to send message',
         variant: 'destructive',
       });
     } finally {
@@ -186,6 +226,7 @@ export function ChatInterface({
                 key={message.id}
                 role={message.role}
                 content={message.content}
+                timestamp={new Date(message.createdAt).toLocaleTimeString()}
               />
             ))}
             
@@ -193,7 +234,7 @@ export function ChatInterface({
               <ChatMessage
                 role="assistant"
                 content={streamingMessage}
-                isLoading={false}
+                messageStatus="streaming"
               />
             )}
             
@@ -201,7 +242,7 @@ export function ChatInterface({
               <ChatMessage
                 role="assistant"
                 content=""
-                isLoading={true}
+                messageStatus="thinking"
               />
             )}
             

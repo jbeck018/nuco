@@ -5,12 +5,11 @@
  * It uses the tRPC client to fetch integration data and manage integration operations.
  */
 
-'use client';
-
+'use client';;
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { trpc } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/client';
 import { useOrganization } from '@/lib/organizations/context';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +37,10 @@ import { IntegrationType } from '@/lib/integrations';
 import type { TRPCClientErrorLike } from '@trpc/client';
 import type { AppRouter } from '@/lib/trpc/router';
 
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+
 // Define the integration interface based on what's returned from the tRPC query
 // Used as a reference for type safety and by getConnectedIntegration
 interface Integration {
@@ -64,6 +67,7 @@ interface AvailableIntegration {
  * Integrations list component
  */
 export function IntegrationsList() {
+  const trpc = useTRPC();
   const router = useRouter();
   const { currentOrganization } = useOrganization();
   const [activeTab, setActiveTab] = useState<'available' | 'connected'>('connected');
@@ -73,13 +77,13 @@ export function IntegrationsList() {
 
   // Fetch user's integrations, considering the organization context if available
   const { data: userIntegrations, isLoading: isLoadingUserIntegrations, refetch: refetchUserIntegrations } = 
-    trpc.integration.getAll.useQuery(
+    useQuery(trpc.integration.getAll.queryOptions(
       currentOrganization ? { organizationId: currentOrganization.id } : undefined
-    );
+    ));
 
   // Fetch available integration types
   const { data: availableIntegrations, isLoading: isLoadingAvailableIntegrations } = 
-    trpc.integration.getAvailableTypes.useQuery();
+    useQuery(trpc.integration.getAvailableTypes.queryOptions());
 
   // Display organization context info if applicable
   useEffect(() => {
@@ -88,38 +92,37 @@ export function IntegrationsList() {
     }
   }, [currentOrganization]);
 
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   // Mutation for disconnecting an integration
-  const disconnectIntegration = trpc.integration.disconnect.useMutation({
+  const disconnectIntegration = useMutation(trpc.integration.disconnect.mutationOptions({
     // Optimistically update the cache
     onMutate: async ({ id }) => {
       // Cancel outgoing refetches to avoid overwriting optimistic update
-      await utils.integration.getAll.cancel();
+      await queryClient.cancelQueries(trpc.integration.getAll.pathFilter());
       
       // Get current data from cache
-      const previousData = utils.integration.getAll.getData(
+      const previousData = queryClient.getQueryData(trpc.integration.getAll.queryKey(
         currentOrganization ? { organizationId: currentOrganization.id } : undefined
-      );
+      ));
       
       // Optimistically update the cache with disconnected status
-      utils.integration.getAll.setData(
-        currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-        (old) => {
-          if (!old) return old;
-          
-          return old.map((integration) => {
-            if (integration.id === id) {
-              return {
-                ...integration,
-                status: 'disconnected',
-                lastSynced: null,
-              };
-            }
-            return integration;
-          });
-        }
-      );
+      queryClient.setQueryData(trpc.integration.getAll.queryKey(
+        currentOrganization ? { organizationId: currentOrganization.id } : undefined
+      ), (old) => {
+        if (!old) return old;
+        
+        return old.map((integration) => {
+          if (integration.id === id) {
+            return {
+              ...integration,
+              status: 'disconnected',
+              lastSynced: null,
+            };
+          }
+          return integration;
+        });
+      });
       
       // Close the disconnect dialog immediately for better UX
       setIsDisconnectDialogOpen(false);
@@ -141,10 +144,9 @@ export function IntegrationsList() {
     onError: (error: TRPCClientErrorLike<AppRouter>, variables, context) => {
       // Restore the previous data
       if (context?.previousData) {
-        utils.integration.getAll.setData(
-          currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-          context.previousData
-        );
+        queryClient.setQueryData(trpc.integration.getAll.queryKey(
+          currentOrganization ? { organizationId: currentOrganization.id } : undefined
+        ), context.previousData);
       }
       
       toast({
@@ -162,31 +164,30 @@ export function IntegrationsList() {
     
     // After success or error, invalidate the query to ensure data consistency
     onSettled: () => {
-      utils.integration.getAll.invalidate();
+      queryClient.invalidateQueries(trpc.integration.getAll.pathFilter());
     },
-  });
+  }));
 
   // Mutation for deleting an integration
-  const deleteIntegration = trpc.integration.delete.useMutation({
+  const deleteIntegration = useMutation(trpc.integration.delete.mutationOptions({
     // Optimistically update the cache
     onMutate: async ({ id }) => {
       // Cancel outgoing refetches to avoid overwriting optimistic update
-      await utils.integration.getAll.cancel();
+      await queryClient.cancelQueries(trpc.integration.getAll.pathFilter());
       
       // Get current data from cache
-      const previousData = utils.integration.getAll.getData(
+      const previousData = queryClient.getQueryData(trpc.integration.getAll.queryKey(
         currentOrganization ? { organizationId: currentOrganization.id } : undefined
-      );
+      ));
       
       // Optimistically update the cache by removing the deleted integration
-      utils.integration.getAll.setData(
-        currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-        (old) => {
-          if (!old) return old;
-          
-          return old.filter(integration => integration.id !== id);
-        }
-      );
+      queryClient.setQueryData(trpc.integration.getAll.queryKey(
+        currentOrganization ? { organizationId: currentOrganization.id } : undefined
+      ), (old) => {
+        if (!old) return old;
+        
+        return old.filter(integration => integration.id !== id);
+      });
       
       // Close the delete dialog immediately for better UX
       setIsDeleteDialogOpen(false);
@@ -208,10 +209,9 @@ export function IntegrationsList() {
     onError: (error: TRPCClientErrorLike<AppRouter>, variables, context) => {
       // Restore the previous data
       if (context?.previousData) {
-        utils.integration.getAll.setData(
-          currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-          context.previousData
-        );
+        queryClient.setQueryData(trpc.integration.getAll.queryKey(
+          currentOrganization ? { organizationId: currentOrganization.id } : undefined
+        ), context.previousData);
       }
       
       toast({
@@ -229,39 +229,38 @@ export function IntegrationsList() {
     
     // After success or error, invalidate the query to ensure data consistency
     onSettled: () => {
-      utils.integration.getAll.invalidate();
+      queryClient.invalidateQueries(trpc.integration.getAll.pathFilter());
     },
-  });
+  }));
 
   // Mutation for syncing an integration
-  const syncIntegration = trpc.integration.sync.useMutation({
+  const syncIntegration = useMutation(trpc.integration.sync.mutationOptions({
     // Optimistically update the cache
     onMutate: async ({ id }) => {
       // Cancel outgoing refetches to avoid overwriting optimistic update
-      await utils.integration.getAll.cancel();
+      await queryClient.cancelQueries(trpc.integration.getAll.pathFilter());
       
       // Get current data from cache
-      const previousData = utils.integration.getAll.getData(
+      const previousData = queryClient.getQueryData(trpc.integration.getAll.queryKey(
         currentOrganization ? { organizationId: currentOrganization.id } : undefined
-      );
+      ));
       
       // Optimistically update the cache with syncing status
-      utils.integration.getAll.setData(
-        currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-        (old) => {
-          if (!old) return old;
-          
-          return old.map(integration => {
-            if (integration.id === id) {
-              return {
-                ...integration,
-                status: 'syncing', // Show as syncing while the operation is in progress
-              };
-            }
-            return integration;
-          });
-        }
-      );
+      queryClient.setQueryData(trpc.integration.getAll.queryKey(
+        currentOrganization ? { organizationId: currentOrganization.id } : undefined
+      ), (old) => {
+        if (!old) return old;
+        
+        return old.map(integration => {
+          if (integration.id === id) {
+            return {
+              ...integration,
+              status: 'syncing', // Show as syncing while the operation is in progress
+            };
+          }
+          return integration;
+        });
+      });
       
       // Return previous data for rollback in case of failure
       return { previousData };
@@ -280,10 +279,9 @@ export function IntegrationsList() {
     onError: (error: TRPCClientErrorLike<AppRouter>, variables, context) => {
       // Restore the previous data
       if (context?.previousData) {
-        utils.integration.getAll.setData(
-          currentOrganization ? { organizationId: currentOrganization.id } : undefined,
-          context.previousData
-        );
+        queryClient.setQueryData(trpc.integration.getAll.queryKey(
+          currentOrganization ? { organizationId: currentOrganization.id } : undefined
+        ), context.previousData);
       }
       
       toast({
@@ -295,9 +293,9 @@ export function IntegrationsList() {
     
     // After success or error, invalidate the query to ensure data consistency
     onSettled: () => {
-      utils.integration.getAll.invalidate();
+      queryClient.invalidateQueries(trpc.integration.getAll.pathFilter());
     },
-  });
+  }));
 
   // Handle connect button click
   const handleConnect = (type: IntegrationType) => {

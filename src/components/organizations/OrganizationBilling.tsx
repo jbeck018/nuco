@@ -11,29 +11,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/lib/trpc/client";
+import { useTRPC } from "@/lib/trpc/trpc";
 import { formatAmount } from "@/lib/stripe/utils";
 import { isOnPaidPlan, hasActiveSubscription } from "@/lib/stripe/service";
+
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 
 interface OrganizationBillingProps {
   organizationId: string;
 }
 
 export function OrganizationBilling({ organizationId }: OrganizationBillingProps) {
+  const trpc = useTRPC();
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   // Get subscription status
   const { data: subscriptionData, isLoading: isLoadingSubscription } = 
-    trpc.organization.getSubscriptionStatus.useQuery({ id: organizationId });
+    useQuery(
+      trpc.organization.getSubscriptionStatus.queryOptions({ id: organizationId })
+    );
 
   // Get available plans
   const { data: plans, isLoading: isLoadingPlans } = 
-    trpc.organization.getAvailablePlans.useQuery();
+    useQuery(trpc.organization.getAvailablePlans.queryOptions());
 
   // Create checkout session mutation
-  const createCheckoutSession = trpc.organization.createCheckoutSession.useMutation({
+  const createCheckoutSession = useMutation(trpc.organization.createCheckoutSession.mutationOptions({
     onSuccess: (data) => {
       if (data.url) {
         router.push(data.url);
@@ -47,10 +53,10 @@ export function OrganizationBilling({ organizationId }: OrganizationBillingProps
       });
       setIsLoading(false);
     },
-  });
+  }));
 
   // Create customer portal session mutation
-  const createCustomerPortalSession = trpc.organization.createCustomerPortalSession.useMutation({
+  const createCustomerPortalSession = useMutation(trpc.organization.createCustomerPortalSession.mutationOptions({
     onSuccess: (data) => {
       if (data.url) {
         router.push(data.url);
@@ -64,7 +70,7 @@ export function OrganizationBilling({ organizationId }: OrganizationBillingProps
       });
       setIsLoading(false);
     },
-  });
+  }));
 
   // Handle subscription checkout
   const handleCheckout = async (priceId: string) => {

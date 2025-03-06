@@ -5,12 +5,9 @@
  * appropriate emoji reactions based on the content.
  */
 
-import { OpenAI } from 'openai';
-
-// Create OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { AIServiceError, generateCompletion } from './service';
+import { PromptTemplate } from './templates';
+import { streamToString } from '@/lib/utils';
 
 // Define sentiment categories and their associated emojis
 export const sentimentEmojis = {
@@ -60,6 +57,55 @@ export interface SentimentResult {
   suggestedEmojis: string[];
   confidence: number;
 }
+
+// Sentiment analysis prompt template
+const sentimentAnalysisTemplate: PromptTemplate = {
+  id: 'sentiment-analysis',
+  name: 'Sentiment Analysis',
+  description: 'Analyze the sentiment of text and suggest appropriate emoji reactions',
+  content: `Analyze the sentiment of the following text and respond with a JSON object containing:
+  1. sentiment: "positive", "negative", "neutral", or "question"
+  2. score: a number between 0 and 1 indicating the strength of the sentiment
+  3. suggestedEmojis: an array of up to {{maxEmojis}} Slack emoji names (without colons) that would be appropriate reactions
+  4. confidence: a number between 0 and 1 indicating your confidence in this analysis
+  
+  {{#if technicalContext}}Technical context: The text is from a {{platform}} conversation related to {{topic}}.{{else}}No additional context provided.{{/if}}
+  
+  Respond ONLY with valid JSON.`,
+  variables: [
+    {
+      name: 'maxEmojis',
+      description: 'Maximum number of emojis to suggest',
+      defaultValue: '3',
+      required: true,
+      type: 'number'
+    },
+    {
+      name: 'technicalContext',
+      description: 'Whether technical context is provided',
+      defaultValue: 'false',
+      required: false,
+      type: 'boolean'
+    },
+    {
+      name: 'platform',
+      description: 'Platform where the conversation is taking place',
+      defaultValue: 'business',
+      required: false,
+      type: 'string'
+    },
+    {
+      name: 'topic',
+      description: 'Topic of conversation',
+      defaultValue: 'general',
+      required: false,
+      type: 'string'
+    }
+  ],
+  tags: ['sentiment', 'analysis', 'emoji'],
+  isPublic: true,
+  userId: 'system'
+};
 
 /**
  * Analyze text sentiment using simple rule-based approach
@@ -155,44 +201,75 @@ export function analyzeTextSentimentSimple(text: string): SentimentResult {
 }
 
 /**
- * Analyze text sentiment using OpenAI
+ * Analyze text sentiment using AI
  * This is more accurate but requires an API call
  * 
  * @param text The text to analyze
+ * @param options Optional parameters for analysis
  * @returns A Promise resolving to a SentimentResult object
  */
-export async function analyzeTextSentimentAI(text: string): Promise<SentimentResult> {
+export async function analyzeTextSentimentAI(
+  text: string,
+  options: {
+    maxEmojis?: number;
+    technicalContext?: boolean;
+    platform?: string;
+    topic?: string;
+    modelId?: string;
+  } = {}
+): Promise<SentimentResult> {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `Analyze the sentiment of the following text and respond with a JSON object containing:
-          1. sentiment: "positive", "negative", "neutral", or "question"
-          2. score: a number between 0 and 1 indicating the strength of the sentiment
-          3. suggestedEmojis: an array of up to 3 Slack emoji names (without colons) that would be appropriate reactions
-          4. confidence: a number between 0 and 1 indicating your confidence in this analysis`
-        },
-        {
-          role: 'user',
-          content: text
-        }
-      ],
-      temperature: 0.3,
-      response_format: { type: 'json_object' }
+    // Prepare template variables
+    const templateVars = {
+      maxEmojis: options.maxEmojis?.toString() || '3',
+      technicalContext: options.technicalContext ? 'true' : 'false',
+      platform: options.platform || 'business',
+      topic: options.topic || 'general'
+    };
+    
+    // Apply template with variables
+    const systemPrompt = sentimentAnalysisTemplate.content.replace(/{{(\w+)}}/g, (_, key) => {
+      return templateVars[key as keyof typeof templateVars] || '';
     });
     
-    const result = JSON.parse(response.choices[0].message.content || '{}');
+    // Generate completion using our AI service
+    const stream = await generateCompletion(
+      [{ role: 'user', content: text }],
+      {
+        systemPrompt,
+        modelId: options.modelId || 'gpt-3.5-turbo',
+        temperature: 0.3,
+      }
+    );
     
-    return {
-      sentiment: result.sentiment || 'neutral',
-      score: result.score || 0.5,
-      suggestedEmojis: result.suggestedEmojis || ['thumbsup'],
-      confidence: result.confidence || 0.5,
-    };
+    // Convert stream to string
+    const responseText = await streamToString(stream);
+    
+    // Parse the JSON response
+    try {
+      const result = JSON.parse(responseText);
+      
+      return {
+        sentiment: result.sentiment || 'neutral',
+        score: result.score || 0.5,
+        suggestedEmojis: result.suggestedEmojis || ['thumbsup'],
+        confidence: result.confidence || 0.5,
+      };
+    } catch (parseError) {
+      console.error('Error parsing sentiment analysis response:', parseError);
+      // Fall back to simple analysis if JSON parsing fails
+      return analyzeTextSentimentSimple(text);
+    }
   } catch (error) {
     console.error('Error analyzing sentiment with AI:', error);
+    
+    // Log more details if it's our custom error type
+    if (error instanceof AIServiceError) {
+      console.error(`AI service error (${error.provider}): ${error.type}`, {
+        status: error.status,
+        retryAfter: error.retryAfter
+      });
+    }
     
     // Fall back to simple analysis
     return analyzeTextSentimentSimple(text);
@@ -204,17 +281,34 @@ export async function analyzeTextSentimentAI(text: string): Promise<SentimentRes
  * Uses a combination of rule-based and AI approaches based on message complexity
  * 
  * @param text The message text to analyze
- * @param useAI Whether to use AI for analysis (defaults to false for performance)
+ * @param options Options for analysis including AI usage and contextual info
  * @returns A Promise resolving to an array of emoji names
  */
-export async function getMessageReactions(text: string, useAI = false): Promise<string[]> {
+export async function getMessageReactions(
+  text: string, 
+  options: {
+    useAI?: boolean;
+    maxEmojis?: number;
+    technicalContext?: boolean;
+    platform?: string;
+    topic?: string;
+    modelId?: string;
+  } = {}
+): Promise<string[]> {
   // For very short messages, use simple analysis
-  if (text.length < 20 || !useAI) {
+  if (text.length < 20 || !options.useAI) {
     const result = analyzeTextSentimentSimple(text);
-    return result.suggestedEmojis;
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
   }
   
   // For longer or more complex messages, use AI
-  const result = await analyzeTextSentimentAI(text);
-  return result.suggestedEmojis;
+  try {
+    const result = await analyzeTextSentimentAI(text, options);
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
+  } catch (error) {
+    console.error('Error getting message reactions:', error);
+    // Fall back to simple analysis in case of error
+    const result = analyzeTextSentimentSimple(text);
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
+  }
 } 

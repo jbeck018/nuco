@@ -45,6 +45,16 @@ const integrationIdSchema = z.object({
   integrationId: z.string().uuid(),
 });
 
+// Flexible user preferences schema
+const userFlexibleMetadataSchema = z.object({
+  key: z.string(),
+  value: z.any(),
+});
+
+const getUserFlexibleMetadataSchema = z.object({
+  key: z.string(),
+});
+
 // Create the router
 export const metadataRouter = router({
   /**
@@ -175,6 +185,54 @@ export const metadataRouter = router({
       
       return result[0];
     }),
+
+  // Get flexible user preference metadata
+  getUserFlexiblePreferences: protectedProcedure
+    .input(getUserFlexibleMetadataSchema)
+    .query(async ({ input, ctx }) => {
+      if (!ctx.session.user?.id) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated',
+        });
+      }
+      
+      const result = await metadataService.getMetadata(
+        'user',
+        ctx.session.user.id,
+        input.key
+      );
+      
+      return result;
+    }),
+  
+  // Set flexible user preference metadata
+  setUserFlexiblePreferences: protectedProcedure
+    .input(userFlexibleMetadataSchema)
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.session.user?.id) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated',
+        });
+      }
+      
+      const result = await metadataService.setMetadata({
+        entityType: 'user',
+        entityId: ctx.session.user.id,
+        key: input.key,
+        value: input.value,
+      });
+      
+      if (!result.length) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to set user preference metadata',
+        });
+      }
+      
+      return result[0];
+    }),
   
   // Update current user's preferences
   updateMyPreferences: protectedProcedure
@@ -232,13 +290,29 @@ export const metadataRouter = router({
   setOrganizationSettings: protectedProcedure
     .input(insertOrganizationSettingsSchema.omit({ id: true, createdAt: true, updatedAt: true }))
     .mutation(async ({ input }) => {
+      // Ensure aiSettings has all required fields if it's being set
+      const processedInput = { ...input };
+      
+      if (processedInput.aiSettings) {
+        // Make sure all required fields are present in aiSettings
+        const aiSettings = processedInput.aiSettings;
+        
+        // Use default values for any missing required fields
+        processedInput.aiSettings = {
+          defaultModel: aiSettings.defaultModel || 'gpt-3.5-turbo',
+          maxTokensPerRequest: aiSettings.maxTokensPerRequest || 2000,
+          promptTemplates: aiSettings.promptTemplates || [],
+          contextSettings: aiSettings.contextSettings
+        };
+      }
+      
       // Convert the input to match the expected NewOrganizationSettings type
       const newOrganizationSettings = {
-        organizationId: input.organizationId,
-        defaultIntegrations: input.defaultIntegrations,
-        memberDefaultRole: input.memberDefaultRole,
-        slackSettings: input.slackSettings,
-        aiSettings: input.aiSettings
+        organizationId: processedInput.organizationId,
+        defaultIntegrations: processedInput.defaultIntegrations,
+        memberDefaultRole: processedInput.memberDefaultRole,
+        slackSettings: processedInput.slackSettings,
+        aiSettings: processedInput.aiSettings
       };
       
       const result = await metadataService.setOrganizationSettings(newOrganizationSettings);
@@ -266,21 +340,47 @@ export const metadataRouter = router({
         webhookUrl: z.string().optional(),
       }).optional(),
       aiSettings: z.object({
-        defaultModel: z.string().optional(),
-        maxTokensPerRequest: z.number().optional(),
+        defaultModel: z.string(),
+        maxTokensPerRequest: z.number(),
         promptTemplates: z.array(z.object({
           id: z.string(),
           name: z.string(),
           isDefault: z.boolean().optional(),
-        })).optional(),
+        })),
+        contextSettings: z.object({
+          includeUserHistory: z.boolean(),
+          includeOrganizationData: z.boolean(),
+          contextWindowSize: z.number(),
+        }).optional(),
       }).optional(),
     }))
     .mutation(async ({ input }) => {
       const { organizationId, ...data } = input;
       
+      // Ensure aiSettings has all required fields if it's being updated
+      const processedData = { ...data };
+      if (processedData.aiSettings) {
+        // If aiSettings is provided, ensure all required fields are present
+        const { aiSettings } = processedData;
+        
+        // Get existing settings to merge with updates
+        const existing = await metadataService.getOrganizationSettings(organizationId);
+        const existingAiSettings = existing?.aiSettings;
+        
+        if (existingAiSettings) {
+          // Merge with existing settings
+          processedData.aiSettings = {
+            defaultModel: aiSettings.defaultModel ?? existingAiSettings.defaultModel,
+            maxTokensPerRequest: aiSettings.maxTokensPerRequest ?? existingAiSettings.maxTokensPerRequest,
+            promptTemplates: aiSettings.promptTemplates ?? existingAiSettings.promptTemplates,
+            contextSettings: aiSettings.contextSettings ?? existingAiSettings.contextSettings
+          };
+        }
+      }
+      
       const result = await metadataService.updateOrganizationSettings(
         organizationId,
-        data
+        processedData
       );
       
       if (!result.length) {

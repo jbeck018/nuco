@@ -4,14 +4,13 @@
  * An example component that uses our optimistic UI hooks for organization settings.
  * This demonstrates how to use the optimistic UI hooks for form handling.
  */
-'use client';
-
+'use client';;
 import { useState } from 'react';
 import { z } from 'zod';
 import { useOptimisticOrganization } from '@/hooks/useOptimisticDashboard';
 import { useTRPCForm } from '@/hooks/useOptimisticForm';
 import { useOrganization } from '@/hooks/useDashboard';
-import { trpc } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +18,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+import { useMutation } from "@tanstack/react-query";
 
 // Form validation schema
 const formSchema = z.object({
@@ -28,15 +29,16 @@ const formSchema = z.object({
 });
 
 export function OptimisticOrganizationSettings({ organizationId }: { organizationId: string }) {
+  const trpc = useTRPC();
   const { organization, isLoading, error } = useOrganization(organizationId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+
   // Use our optimistic update hook - moved outside of conditionals
   const { deleteOrganization, isDeleting } = useOptimisticOrganization(organizationId);
-  
+
   // Get the mutation directly from tRPC
-  const updateMutation = trpc.organization.update.useMutation();
-  
+  const updateMutation = useMutation(trpc.organization.update.mutationOptions());
+
   // Use our form hook with the mutation - moved outside of conditionals
   const form = useTRPCForm(updateMutation, {
     defaultValues: {
@@ -49,19 +51,19 @@ export function OptimisticOrganizationSettings({ organizationId }: { organizatio
       description: "Organization settings have been updated successfully",
     },
   });
-  
+
   // Form submission handler
   const onSubmit = (data: z.infer<typeof formSchema>) => {
     // The useTRPCForm hook handles the mutation
     // This is just a placeholder for any additional logic
     console.log("Form submitted:", data);
   };
-  
+
   const handleDeleteOrganization = () => {
     deleteOrganization({});
     setIsDialogOpen(false);
   };
-  
+
   // If no organization data is available yet, show a loading state
   if (isLoading) {
     return (
@@ -74,7 +76,7 @@ export function OptimisticOrganizationSettings({ organizationId }: { organizatio
       </div>
     );
   }
-  
+
   // If there was an error, show an error message
   if (error || !organization) {
     return (
@@ -87,7 +89,7 @@ export function OptimisticOrganizationSettings({ organizationId }: { organizatio
       </Alert>
     );
   }
-  
+
   return (
     <div className="space-y-6">
       <Card>

@@ -4,10 +4,14 @@
  * A hook for managing user preferences with optimistic updates.
  * This hook provides a convenient interface for reading and updating user preferences.
  */
-import { trpc } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/client';
 import { useSession } from 'next-auth/react';
 import { toast } from '@/components/ui/use-toast';
 import { useCallback } from 'react';
+
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type FontSize = 'small' | 'medium' | 'large';
@@ -29,13 +33,14 @@ export interface Customization {
  * Hook for managing user preferences with optimistic updates
  */
 export const useUserPreferences = () => {
+  const trpc = useTRPC();
   const { data: session } = useSession();
   const userId = session?.user?.id;
-  
-  const utils = trpc.useContext();
-  
+
+  const queryClient = useQueryClient();
+
   // Query for fetching user preferences
-  const preferencesQuery = trpc.metadata.getMyPreferences.useQuery(
+  const preferencesQuery = useQuery(trpc.metadata.getMyPreferences.queryOptions(
     undefined, // No input required
     {
       // Only run the query if we have a session
@@ -45,42 +50,39 @@ export const useUserPreferences = () => {
       // tRPC expects [path, input] format
       queryKey: ['metadata.getMyPreferences', undefined],
     }
-  );
-  
+  ));
+
   const { data: preferences, isLoading, error } = preferencesQuery;
-  
+
   // Mutation for updating user preferences
-  const updateMutation = trpc.metadata.updateMyPreferences.useMutation({
+  const updateMutation = useMutation(trpc.metadata.updateMyPreferences.mutationOptions({
     // When mutating, cancel any outgoing refetches
     // so they don't overwrite our optimistic update
     onMutate: async (newData) => {
       // Cancel outgoing refetches
-      await utils.metadata.getMyPreferences.cancel();
+      await queryClient.cancelQueries(trpc.metadata.getMyPreferences.pathFilter());
       
       // Get current data from cache
-      const previousData = utils.metadata.getMyPreferences.getData();
+      const previousData = queryClient.getQueryData(trpc.metadata.getMyPreferences.queryKey());
       
       // Optimistically update the cache with merged data
       if (previousData) {
-        utils.metadata.getMyPreferences.setData(
-          undefined, 
-          oldData => {
-            if (!oldData) return oldData;
-            
-            // Deep merge handling for nested objects
-            return {
-              ...oldData,
-              ...newData,
-              // For nested objects, we need to handle special merging
-              notifications: newData.notifications
-                ? { ...oldData.notifications, ...newData.notifications }
-                : oldData.notifications,
-              customization: newData.customization
-                ? { ...(oldData.customization || {}), ...newData.customization }
-                : oldData.customization
-            };
-          }
-        );
+        queryClient.setQueryData(trpc.metadata.getMyPreferences.queryKey(), oldData => {
+          if (!oldData) return oldData;
+          
+          // Deep merge handling for nested objects
+          return {
+            ...oldData,
+            ...newData,
+            // For nested objects, we need to handle special merging
+            notifications: newData.notifications
+              ? { ...oldData.notifications, ...newData.notifications }
+              : oldData.notifications,
+            customization: newData.customization
+              ? { ...(oldData.customization || {}), ...newData.customization }
+              : oldData.customization
+          };
+        });
       }
       
       // Return context with the previous data
@@ -90,10 +92,7 @@ export const useUserPreferences = () => {
     onError: (error, newData, context) => {
       // If there was an error, roll back to previous data
       if (context?.previousData) {
-        utils.metadata.getMyPreferences.setData(
-          undefined,
-          context.previousData
-        );
+        queryClient.setQueryData(trpc.metadata.getMyPreferences.queryKey(), context.previousData);
       }
       
       // Show error toast
@@ -114,19 +113,19 @@ export const useUserPreferences = () => {
     
     onSettled: () => {
       // Invalidate the query to refetch fresh data
-      utils.metadata.getMyPreferences.invalidate();
+      queryClient.invalidateQueries(trpc.metadata.getMyPreferences.pathFilter());
     },
-  });
-  
+  }));
+
   // Convenience methods for updating specific preferences
-  
+
   const updateTheme = useCallback(
     (theme: ThemePreference) => {
       return updateMutation.mutate({ theme });
     },
     [updateMutation]
   );
-  
+
   const updateNotifications = useCallback(
     (notifications: Partial<Notifications>) => {
       if (!preferences?.notifications) return;
@@ -140,7 +139,7 @@ export const useUserPreferences = () => {
     },
     [preferences?.notifications, updateMutation]
   );
-  
+
   const updateCustomization = useCallback(
     (customization: Partial<Customization>) => {
       updateMutation.mutate({
@@ -152,7 +151,7 @@ export const useUserPreferences = () => {
     },
     [preferences?.customization, updateMutation]
   );
-  
+
   return {
     preferences,
     isLoading,

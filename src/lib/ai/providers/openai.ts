@@ -20,6 +20,133 @@ export interface OpenAIFunction {
 }
 
 /**
+ * OpenAI API error types
+ */
+export enum OpenAIErrorType {
+  RATE_LIMIT = 'rate_limit',
+  TOKEN_LIMIT = 'token_limit',
+  INVALID_REQUEST = 'invalid_request',
+  AUTHENTICATION = 'authentication',
+  PERMISSIONS = 'permissions',
+  SERVER_ERROR = 'server_error',
+  CONNECTION = 'connection',
+  TIMEOUT = 'timeout',
+  UNKNOWN = 'unknown'
+}
+
+/**
+ * Custom error class for OpenAI API errors
+ */
+export class OpenAIError extends Error {
+  type: OpenAIErrorType;
+  status?: number;
+  retryAfter?: number;
+
+  constructor(message: string, type: OpenAIErrorType = OpenAIErrorType.UNKNOWN, status?: number) {
+    super(message);
+    this.name = 'OpenAIError';
+    this.type = type;
+    this.status = status;
+  }
+}
+
+/**
+ * Parse OpenAI API error response and return a standardized error
+ */
+function parseOpenAIError(error: unknown): OpenAIError {
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, any>;
+    
+    // Handle rate limit errors
+    if (err.status === 429 || (err.error?.type === 'rate_limit_exceeded')) {
+      const retryAfter = err.headers?.['retry-after'] ? parseInt(err.headers['retry-after'], 10) : undefined;
+      const error = new OpenAIError(
+        'Rate limit exceeded. Please try again later.',
+        OpenAIErrorType.RATE_LIMIT,
+        429
+      );
+      error.retryAfter = retryAfter;
+      return error;
+    }
+    
+    // Handle token limit errors
+    if (err.status === 400 && err.error?.code === 'context_length_exceeded') {
+      return new OpenAIError(
+        'The input is too long for the model to process. Please reduce the length of your prompt.',
+        OpenAIErrorType.TOKEN_LIMIT,
+        400
+      );
+    }
+    
+    // Handle authentication errors
+    if (err.status === 401) {
+      return new OpenAIError(
+        'Authentication error: Invalid API key or token.',
+        OpenAIErrorType.AUTHENTICATION,
+        401
+      );
+    }
+    
+    // Handle permissions errors
+    if (err.status === 403) {
+      return new OpenAIError(
+        'You do not have permission to access this resource or model.',
+        OpenAIErrorType.PERMISSIONS,
+        403
+      );
+    }
+    
+    // Handle server errors
+    if (err.status >= 500) {
+      return new OpenAIError(
+        'OpenAI server error. Please try again later.',
+        OpenAIErrorType.SERVER_ERROR,
+        err.status
+      );
+    }
+    
+    // Handle invalid requests
+    if (err.status === 400) {
+      return new OpenAIError(
+        err.error?.message || 'Invalid request to OpenAI API.',
+        OpenAIErrorType.INVALID_REQUEST,
+        400
+      );
+    }
+    
+    // If we have an error message, use it
+    if (err.message) {
+      return new OpenAIError(String(err.message));
+    }
+  }
+  
+  // Default error handling for network issues
+  if (error instanceof Error) {
+    if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      return new OpenAIError(
+        'Request to OpenAI API timed out. Please try again later.',
+        OpenAIErrorType.TIMEOUT
+      );
+    }
+    
+    if (error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND')) {
+      return new OpenAIError(
+        'Could not connect to OpenAI API. Please check your internet connection.',
+        OpenAIErrorType.CONNECTION
+      );
+    }
+    
+    return new OpenAIError(error.message);
+  }
+  
+  // Fallback for unknown errors
+  return new OpenAIError(
+    'An unknown error occurred with the OpenAI API.',
+    OpenAIErrorType.UNKNOWN
+  );
+}
+
+/**
  * Generate a streaming completion from OpenAI
  * @param messages The messages to send to the API
  * @param modelConfig The model configuration to use
@@ -51,7 +178,7 @@ export async function generateOpenAIStream(
     });
   } catch (error) {
     console.error('OpenAI API error:', error);
-    throw new Error(`Failed to generate completion: ${(error as Error).message}`);
+    throw parseOpenAIError(error);
   }
 }
 
@@ -62,7 +189,6 @@ export async function generateOpenAIStream(
  */
 export async function countOpenAITokens(text: string): Promise<number> {
   try {
-
     const { embedding } = await embed({
       model: openai.embedding('text-embedding-3-small'),
       value: text,
@@ -91,6 +217,6 @@ export async function generateOpenAIEmbeddings(text: string): Promise<number[]> 
     return embedding;
   } catch (error) {
     console.error('Embedding generation error:', error);
-    throw new Error(`Failed to generate embeddings: ${(error as Error).message}`);
+    throw parseOpenAIError(error);
   }
 } 

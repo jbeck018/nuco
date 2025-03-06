@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { csrfProtection } from "@/lib/middleware/csrf";
 import { rateLimit } from "@/lib/middleware/rate-limit";
-import { auth } from '@/lib/auth';
+import { getUserFromRequest } from "@/lib/auth/middleware-auth";
 
 // Define protected routes that require authentication
 const protectedRoutes = [
@@ -18,8 +17,32 @@ const protectedRoutes = [
 // Define auth routes that should redirect to dashboard if already authenticated
 const authRoutes = ["/auth/login", "/auth/signup"];
 
+// Define static asset paths that should be cached
+const staticAssetPaths = [
+  "/_next/static",
+  "/images",
+  "/fonts",
+  "/icons",
+];
+
+// Simple function to determine cache settings based on path
+function getCacheSettings(pathname: string): string {
+  // Check if the path is for static assets
+  if (staticAssetPaths.some(path => pathname.startsWith(path))) {
+    return "public, max-age=31536000, immutable"; // Cache static assets for 1 year
+  }
+  
+  // API routes should not be cached
+  if (pathname.startsWith("/api/")) {
+    return "no-store, no-cache, must-revalidate";
+  }
+  
+  // Default cache settings for other routes
+  return "public, max-age=0, must-revalidate";
+}
+
 export async function middleware(request: NextRequest) {
-  const session = await auth();
+  const user = await getUserFromRequest(request);
   const pathname = request.nextUrl.pathname;
   
   // Apply rate limiting
@@ -34,6 +57,20 @@ export async function middleware(request: NextRequest) {
     return csrfResponse;
   }
   
+  // Apply caching headers based on path
+  const response = NextResponse.next();
+  
+  // Set appropriate cache headers based on content type
+  response.headers.set("Cache-Control", getCacheSettings(pathname));
+  
+  // Add Server-Timing header for performance monitoring
+  const startTime = Date.now();
+  const endTime = Date.now();
+  response.headers.set(
+    "Server-Timing", 
+    `edge;dur=${endTime - startTime};desc="Edge Middleware"`
+  );
+  
   // Check if the path is a protected route
   const isProtectedRoute = protectedRoutes.some((route) => 
     pathname.startsWith(route)
@@ -44,14 +81,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(route)
   );
   
-  // Get the authentication token
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-  
   // If the user is not authenticated and trying to access a protected route
-  if (!session?.user && (
+  if (!user && (
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/chat') ||
     pathname.startsWith('/integrations') ||
@@ -64,12 +95,12 @@ export async function middleware(request: NextRequest) {
   }
   
   // If the user is authenticated and trying to access an organization route
-  if (session?.user && pathname.startsWith('/org')) {
+  if (user && pathname.startsWith('/org')) {
     // Extract the organization slug from the URL
     const orgSlug = pathname.split('/')[2];
     
     // If no organization slug is provided, redirect to the default organization
-    if (!orgSlug && session.user.defaultOrganizationId) {
+    if (!orgSlug && user.defaultOrganizationId) {
       // We need to fetch the organization slug from the database
       // For now, redirect to a page that will handle this
       return NextResponse.redirect(new URL('/dashboard', request.url));
@@ -80,19 +111,19 @@ export async function middleware(request: NextRequest) {
   }
   
   // If the route is protected and the user is not authenticated, redirect to login
-  if (isProtectedRoute && !token) {
+  if (isProtectedRoute && !user) {
     const url = new URL("/auth/login", request.url);
     url.searchParams.set("callbackUrl", encodeURI(pathname));
     return NextResponse.redirect(url);
   }
   
   // If the route is an auth route and the user is already authenticated, redirect to dashboard
-  if (isAuthRoute && token) {
+  if (isAuthRoute && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   
   // Continue with the request for all other cases
-  return NextResponse.next();
+  return response;
 }
 
 // Configure the middleware to run on specific paths
@@ -100,12 +131,10 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public files (public assets)
      */
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
+    "/((?!favicon.ico|public).*)",
     '/dashboard/:path*',
     '/chat/:path*',
     '/integrations/:path*',

@@ -4,9 +4,13 @@
  * A hook for managing integration settings with optimistic updates.
  * This hook provides a convenient interface for reading and updating integration-specific settings.
  */
-import { trpc } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/client';
 import { toast } from '@/components/ui/use-toast';
 import { useCallback } from 'react';
+
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Types for integration settings
@@ -55,10 +59,11 @@ export interface IntegrationSettings {
  * Hook to manage integration settings
  */
 export const useIntegrationSettings = (integrationId: string) => {
-  const utils = trpc.useContext();
-  
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
   // Query for fetching integration settings
-  const settingsQuery = trpc.metadata.getIntegrationSettings.useQuery(
+  const settingsQuery = useQuery(trpc.metadata.getIntegrationSettings.queryOptions(
     { integrationId },
     {
       enabled: !!integrationId,
@@ -66,23 +71,23 @@ export const useIntegrationSettings = (integrationId: string) => {
       // Use the correct format for queryKey per tRPC expectations: [path, input]
       queryKey: ['metadata.getIntegrationSettings', { integrationId }],
     }
-  );
-  
+  ));
+
   const { data: settings, isLoading, error } = settingsQuery;
-  
+
   // Mutation for updating integration settings
-  const updateMutation = trpc.metadata.updateIntegrationSettings.useMutation({
+  const updateMutation = useMutation(trpc.metadata.updateIntegrationSettings.mutationOptions({
     onMutate: async (newData) => {
       // Cancel any outgoing refetches
-      await utils.metadata.getIntegrationSettings.cancel({ integrationId });
+      await queryClient.cancelQueries(trpc.metadata.getIntegrationSettings.queryFilter({ integrationId }));
       
       // Get current data from cache
-      const previousData = utils.metadata.getIntegrationSettings.getData({ integrationId });
+      const previousData = queryClient.getQueryData(trpc.metadata.getIntegrationSettings.queryKey({ integrationId }));
       
       // Optimistically update the cache with new data
       if (previousData) {
-        utils.metadata.getIntegrationSettings.setData(
-          { integrationId }, 
+        queryClient.setQueryData(
+          trpc.metadata.getIntegrationSettings.queryKey({ integrationId }),
           oldData => {
             if (!oldData) return oldData;
             
@@ -112,8 +117,8 @@ export const useIntegrationSettings = (integrationId: string) => {
     onError: (err, _, context) => {
       // Rollback to previous data if there was an error
       if (context?.previousData) {
-        utils.metadata.getIntegrationSettings.setData(
-          { integrationId }, 
+        queryClient.setQueryData(
+          trpc.metadata.getIntegrationSettings.queryKey({ integrationId }),
           context.previousData
         );
       }
@@ -136,10 +141,10 @@ export const useIntegrationSettings = (integrationId: string) => {
     
     onSettled: () => {
       // Invalidate the query to refetch fresh data
-      utils.metadata.getIntegrationSettings.invalidate({ integrationId });
+      queryClient.invalidateQueries(trpc.metadata.getIntegrationSettings.queryFilter({ integrationId }));
     },
-  });
-  
+  }));
+
   // Convenience method for updating sync frequency
   const setSyncFrequency = useCallback((syncFrequency: SyncFrequency) => {
     updateMutation.mutate({
@@ -147,7 +152,7 @@ export const useIntegrationSettings = (integrationId: string) => {
       syncFrequency,
     });
   }, [integrationId, updateMutation]);
-  
+
   // Convenience method for updating sync settings
   const setSyncSettings = useCallback((syncSettings: Partial<SyncSettings>) => {
     updateMutation.mutate({
@@ -158,7 +163,7 @@ export const useIntegrationSettings = (integrationId: string) => {
       },
     });
   }, [integrationId, settings?.syncSettings, updateMutation]);
-  
+
   // Convenience method for updating API settings
   const setApiSettings = useCallback((apiSettings: Partial<ApiSettings>) => {
     updateMutation.mutate({
@@ -169,27 +174,27 @@ export const useIntegrationSettings = (integrationId: string) => {
       },
     });
   }, [integrationId, settings?.apiSettings, updateMutation]);
-  
+
   // Convenience method for updating fields to sync
   const setFields = useCallback((fields: string[]) => {
     setSyncSettings({ fields });
   }, [setSyncSettings]);
-  
+
   // Convenience method for updating excluded fields
   const setExcludedFields = useCallback((excludedFields: string[]) => {
     setSyncSettings({ excludedFields });
   }, [setSyncSettings]);
-  
+
   // Convenience method for updating sync direction
   const setSyncDirection = useCallback((syncDirection: 'oneway' | 'bidirectional') => {
     setSyncSettings({ syncDirection });
   }, [setSyncSettings]);
-  
+
   // Convenience method for updating conflict resolution strategy
   const setConflictResolution = useCallback((conflictResolution: 'newest' | 'manual' | 'integration' | 'nuco') => {
     setSyncSettings({ conflictResolution });
   }, [setSyncSettings]);
-  
+
   return {
     // Data
     settings,

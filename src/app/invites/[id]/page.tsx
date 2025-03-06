@@ -1,12 +1,14 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { OrganizationInvite } from "@/components/organizations/OrganizationInvite";
-import { trpc } from "@/lib/trpc/client";
+import { useTRPC } from "@/lib/trpc/trpc";
 import { Loader2 } from "lucide-react";
 
+import { useQuery } from "@tanstack/react-query";
+
 export default function InvitePage() {
+  const trpc = useTRPC();
   const params = useParams<{ id: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,30 +19,33 @@ export default function InvitePage() {
     inviterName?: string;
   } | null>(null);
 
-  const getInviteQuery = trpc.organization.getInvite.useQuery(
-    { inviteId: params.id },
-    {
+  // Use the query directly and handle the data in useEffect
+  const { data, isError, error: queryError, isSuccess } = useQuery(
+    trpc.organization.getInvite.queryOptions({ inviteId: params.id }, {
       enabled: !!params.id,
-      onSuccess: (data) => {
-        if (data) {
-          setInviteData({
-            id: params.id,
-            organizationId: data.organizationId,
-            organizationName: data.organizationName,
-            inviterName: data.inviterName,
-          });
-        } else {
-          setError("Invitation not found or has expired");
-        }
-        setIsLoading(false);
-      },
-      onError: (error) => {
-        console.error("Error fetching invitation:", error);
-        setError("Failed to load invitation");
-        setIsLoading(false);
-      },
-    }
+    })
   );
+
+  // Handle data and errors with useEffect
+  useEffect(() => {
+    if (data) {
+      setInviteData({
+        id: params.id,
+        organizationId: data.organizationId,
+        organizationName: data.organizationName,
+        inviterName: data.inviterName,
+      });
+      setIsLoading(false);
+    } else if (isError) {
+      console.error("Error fetching invitation:", queryError);
+      setError("Failed to load invitation");
+      setIsLoading(false);
+    } else if (isSuccess && !data) {
+      // Handle case when query succeeds but returns null/undefined
+      setError("Invitation not found or has expired");
+      setIsLoading(false);
+    }
+  }, [data, isError, isSuccess, queryError, params.id]);
 
   if (isLoading) {
     return (

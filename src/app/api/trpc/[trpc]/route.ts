@@ -31,8 +31,9 @@ export async function POST(
  */
 async function handleRequest(
   request: Request,
-  { }: { trpc: string }
+  { trpc }: { trpc: string }
 ) {
+  console.log('handleRequest', trpc);
   return fetchRequestHandler({
     endpoint: '/api/trpc',
     req: request,

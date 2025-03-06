@@ -1,12 +1,11 @@
-"use client";
-
+"use client";;
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "@/components/ui/use-toast";
-import { trpc } from "@/lib/trpc/client";
+import { useTRPC } from "@/lib/trpc/trpc";
 import { useOrganization } from "@/lib/organizations/context";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +36,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+
 const formSchema = z.object({
   name: z.string().min(1, "Organization name is required").max(100),
   website: z.string().url().optional().or(z.literal("")),
@@ -46,20 +48,21 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export function OrganizationSettings() {
+  const trpc = useTRPC();
   const { currentOrganization, refreshOrganizations } = useOrganization();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const router = useRouter();
-  const utils = trpc.useUtils();
-  
-  const updateMutation = trpc.organization.update.useMutation({
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation(trpc.organization.update.mutationOptions({
     onMutate: async (data) => {
-      await utils.organization.getById.cancel({ id: data.id });
-      await utils.organization.getAll.cancel();
+      await queryClient.cancelQueries(trpc.organization.getById.queryFilter({ id: data.id }));
+      await queryClient.cancelQueries(trpc.organization.getAll.pathFilter());
       
-      const previousOrganization = utils.organization.getById.getData({ id: data.id });
+      const previousOrganization = queryClient.getQueryData(trpc.organization.getById.queryKey({ id: data.id }));
       
-      utils.organization.getById.setData({ id: data.id }, (old) => {
+      queryClient.setQueryData(trpc.organization.getById.queryKey({ id: data.id }), (old) => {
         if (!old) return old;
         
         return {
@@ -70,7 +73,7 @@ export function OrganizationSettings() {
         };
       });
       
-      utils.organization.getAll.setData(undefined, (old) => {
+      queryClient.setQueryData(trpc.organization.getAll.queryKey(), (old) => {
         if (!old) return old;
         
         return old.map(org => {
@@ -98,9 +101,12 @@ export function OrganizationSettings() {
     
     onError: (error, variables, context) => {
       if (context?.previousOrganization) {
-        utils.organization.getById.setData({ id: variables.id }, context.previousOrganization);
+        queryClient.setQueryData(
+          trpc.organization.getById.queryKey({ id: variables.id }),
+          context.previousOrganization
+        );
         
-        utils.organization.getAll.setData(undefined, (old) => {
+        queryClient.setQueryData(trpc.organization.getAll.queryKey(), (old) => {
           if (!old) return old;
           
           return old.map(org => {
@@ -124,29 +130,29 @@ export function OrganizationSettings() {
     },
     
     onSettled: async (_, __, variables) => {
-      await utils.organization.getById.invalidate({ id: variables.id });
-      await utils.organization.getAll.invalidate();
+      await queryClient.invalidateQueries(trpc.organization.getById.queryFilter({ id: variables.id }));
+      await queryClient.invalidateQueries(trpc.organization.getAll.pathFilter());
       await refreshOrganizations();
     }
-  });
-  
-  const deleteMutation = trpc.organization.delete.useMutation({
+  }));
+
+  const deleteMutation = useMutation(trpc.organization.delete.mutationOptions({
     onMutate: async ({ id }) => {
       setIsDeleting(true);
       setIsDialogOpen(false);
       
-      await utils.organization.getById.cancel({ id });
-      await utils.organization.getAll.cancel();
+      await queryClient.cancelQueries(trpc.organization.getById.queryFilter({ id }));
+      await queryClient.cancelQueries(trpc.organization.getAll.pathFilter());
       
-      const previousOrganization = utils.organization.getById.getData({ id });
-      const previousOrganizations = utils.organization.getAll.getData();
+      const previousOrganization = queryClient.getQueryData(trpc.organization.getById.queryKey({ id }));
+      const previousOrganizations = queryClient.getQueryData(trpc.organization.getAll.queryKey());
       
-      utils.organization.getAll.setData(undefined, (old) => {
+      queryClient.setQueryData(trpc.organization.getAll.queryKey(), (old) => {
         if (!old) return old;
         return old.filter(org => org.id !== id);
       });
       
-      utils.organization.getById.setData({ id }, () => undefined);
+      queryClient.setQueryData(trpc.organization.getById.queryKey({ id }), () => undefined);
       
       return { previousOrganization, previousOrganizations };
     },
@@ -163,11 +169,14 @@ export function OrganizationSettings() {
     
     onError: (error, variables, context) => {
       if (context?.previousOrganization) {
-        utils.organization.getById.setData({ id: variables.id }, context.previousOrganization);
+        queryClient.setQueryData(
+          trpc.organization.getById.queryKey({ id: variables.id }),
+          context.previousOrganization
+        );
       }
       
       if (context?.previousOrganizations) {
-        utils.organization.getAll.setData(undefined, context.previousOrganizations);
+        queryClient.setQueryData(trpc.organization.getAll.queryKey(), context.previousOrganizations);
       }
       
       console.error("Failed to delete organization:", error);
@@ -183,10 +192,10 @@ export function OrganizationSettings() {
     onSettled: () => {
       setIsDeleting(false);
       
-      utils.organization.getById.invalidate();
-      utils.organization.getAll.invalidate();
+      queryClient.invalidateQueries(trpc.organization.getById.pathFilter());
+      queryClient.invalidateQueries(trpc.organization.getAll.pathFilter());
     }
-  });
+  }));
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

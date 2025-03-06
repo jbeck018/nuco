@@ -12,5 +12,8 @@
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils"
+  },
+  "icons": {
+    "default": "lucide"
   }
 } 
