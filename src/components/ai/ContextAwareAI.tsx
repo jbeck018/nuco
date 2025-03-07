@@ -119,7 +119,7 @@ export function ContextAwareAI({
       }
       
       // Process the streaming response
-      await streamToString(completionStream, (chunk) => {
+      await streamToString(completionStream, (chunk: string) => {
         setResponse(prev => prev + chunk);
       });
       

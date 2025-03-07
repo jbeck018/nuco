@@ -87,7 +87,10 @@ export const useIntegrationSettings = (integrationId: string) => {
       if (previousData) {
         queryClient.setQueryData(
           trpc.metadata.getIntegrationSettings.queryKey({ integrationId }),
-          (oldData: IntegrationSettings | undefined) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (input: any) => {
+            // Cast input to IntegrationSettings
+            const oldData = input as IntegrationSettings | undefined;
             if (!oldData) return oldData;
             
             // Create updated data by merging old and new

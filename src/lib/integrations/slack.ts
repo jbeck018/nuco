@@ -39,6 +39,9 @@ export const slackConfigSchema = z.object({
   botUserId: z.string().optional(),
   webhookUrl: z.string().optional(),
   scopes: z.array(z.string()).default(DEFAULT_SCOPES),
+  accessToken: z.string().optional(),
+  refreshToken: z.string().optional(),
+  expiresAt: z.number().optional(),
 });
 
 export type SlackConfig = z.infer<typeof slackConfigSchema>;
@@ -456,6 +459,40 @@ export class SlackIntegration implements Integration {
       Buffer.from(hash),
       Buffer.from(computedHash)
     );
+  }
+  
+  /**
+   * Get presence information for all users
+   * @returns The presence information for all users
+   */
+  async getAllUsersPresence(): Promise<Record<string, unknown>> {
+    try {
+      // First get all users
+      const users = await this.getUsers();
+      
+      // Then get presence for each user
+      const usersWithPresence = await Promise.all(
+        users.map(async (user) => {
+          const presenceData = await this.getUserPresence(user.id);
+          return {
+            user_id: user.id,
+            user_name: user.name,
+            ...presenceData
+          };
+        })
+      );
+      
+      return {
+        ok: true,
+        users: usersWithPresence
+      };
+    } catch (error) {
+      console.error('Error getting all users presence:', error);
+      return {
+        ok: false,
+        error: 'Failed to get users presence'
+      };
+    }
   }
 }
 

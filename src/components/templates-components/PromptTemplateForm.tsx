@@ -304,7 +304,7 @@ export default function PromptTemplateForm({
                       </p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Use {{ variable_name }} syntax to define variables in
+                        Use {"{{"} variable_name {"}}"}  syntax to define variables in
                         your template.
                       </p>
                     )}
@@ -412,7 +412,7 @@ export default function PromptTemplateForm({
                     <AlertTitle>Variable Usage</AlertTitle>
                     <AlertDescription>
                       Variables should be referenced in your template content
-                      using the {{ variable_name }} syntax.
+                      using the {"{{"} variable_name {"}}"}  syntax.
                     </AlertDescription>
                   </Alert>
                 </TabsContent>

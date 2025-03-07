@@ -55,6 +55,7 @@ export class OpenAIError extends Error {
  */
 function parseOpenAIError(error: unknown): OpenAIError {
   if (typeof error === 'object' && error !== null) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const err = error as Record<string, any>;
     
     // Handle rate limit errors

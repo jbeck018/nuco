@@ -8,9 +8,28 @@ import { z } from 'zod';
 import { protectedProcedure, router } from '@/lib/trpc/server';
 import * as metadataService from '@/lib/metadata/service';
 import { TRPCError } from '@trpc/server';
-import { insertUserPreferencesSchema } from '@/lib/db/schema/user-preferences';
+import { insertUserPreferencesSchema, NewUserPreferences } from '@/lib/db/schema/user-preferences';
 import { insertOrganizationSettingsSchema } from '@/lib/db/schema/organization-settings';
 import { insertIntegrationSettingsSchema } from '@/lib/db/schema/integration-settings';
+// Define widget type to avoid using 'any'
+interface DashboardWidgetInput {
+  id: string | number;
+  type: string;
+  position: {
+    x: number | string;
+    y: number | string;
+    w: number | string;
+    h: number | string;
+  };
+  settings?: Record<string, unknown>;
+}
+
+// Define template type to avoid using 'any'
+interface PromptTemplateInput {
+  id: string | number;
+  name: string;
+  isDefault?: boolean;
+}
 
 // Input validation schemas
 const entityMetadataSchema = z.object({
@@ -167,12 +186,31 @@ export const metadataRouter = router({
         locale: input.locale,
         notifications: input.notifications,
         dashboardLayout: input.dashboardLayout ? {
-          widgets: input.dashboardLayout.widgets
+          widgets: Array.isArray(input.dashboardLayout.widgets) 
+            ? input.dashboardLayout.widgets.map((widget: unknown) => {
+                const typedWidget = widget as DashboardWidgetInput;
+                return {
+                  id: String(typedWidget.id),
+                  type: String(typedWidget.type),
+                  position: {
+                    x: Number(typedWidget.position.x),
+                    y: Number(typedWidget.position.y),
+                    w: Number(typedWidget.position.w),
+                    h: Number(typedWidget.position.h)
+                  },
+                  settings: typedWidget.settings
+                };
+              })
+            : []
         } : undefined,
-        customization: input.customization
+        customization: input.customization ? {
+          accentColor: input.customization.accentColor as string | undefined,
+          fontSize: input.customization.fontSize as 'small' | 'medium' | 'large' | undefined,
+          compactMode: Boolean(input.customization.compactMode)
+        } : undefined
       };
       
-      const result = await metadataService.setUserPreferences(newUserPreferences);
+      const result = await metadataService.setUserPreferences(newUserPreferences as NewUserPreferences);
       
       if (!result.length) {
         throw new TRPCError({
@@ -288,29 +326,35 @@ export const metadataRouter = router({
   setOrganizationSettings: protectedProcedure
     .input(insertOrganizationSettingsSchema.omit({ id: true, createdAt: true, updatedAt: true }))
     .mutation(async ({ input }) => {
-      // Ensure aiSettings has all required fields if it's being set
-      const processedInput = { ...input };
-      
-      if (processedInput.aiSettings) {
-        // Make sure all required fields are present in aiSettings
-        const aiSettings = processedInput.aiSettings;
-        
-        // Use default values for any missing required fields
-        processedInput.aiSettings = {
-          defaultModel: aiSettings.defaultModel || 'gpt-3.5-turbo',
-          maxTokensPerRequest: aiSettings.maxTokensPerRequest || 2000,
-          promptTemplates: aiSettings.promptTemplates || [],
-          contextSettings: aiSettings.contextSettings
-        };
-      }
-      
       // Convert the input to match the expected NewOrganizationSettings type
       const newOrganizationSettings = {
-        organizationId: processedInput.organizationId,
-        defaultIntegrations: processedInput.defaultIntegrations,
-        memberDefaultRole: processedInput.memberDefaultRole,
-        slackSettings: processedInput.slackSettings,
-        aiSettings: processedInput.aiSettings
+        organizationId: input.organizationId,
+        defaultIntegrations: Array.isArray(input.defaultIntegrations) 
+          ? [...input.defaultIntegrations] as string[]
+          : input.defaultIntegrations,
+        memberDefaultRole: input.memberDefaultRole as "admin" | "member",
+        slackSettings: input.slackSettings ? {
+          notifyOnNewMembers: Boolean(input.slackSettings.notifyOnNewMembers),
+          notifyOnIntegrationChanges: Boolean(input.slackSettings.notifyOnIntegrationChanges),
+          defaultChannels: Array.isArray(input.slackSettings.defaultChannels) 
+            ? input.slackSettings.defaultChannels.map(channel => String(channel))
+            : undefined,
+          webhookUrl: input.slackSettings.webhookUrl ? String(input.slackSettings.webhookUrl) : undefined
+        } : input.slackSettings,
+        aiSettings: input.aiSettings ? {
+          defaultModel: String(input.aiSettings.defaultModel),
+          maxTokensPerRequest: Number(input.aiSettings.maxTokensPerRequest),
+          promptTemplates: Array.isArray(input.aiSettings.promptTemplates)
+            ? input.aiSettings.promptTemplates.map((template: unknown) => {
+                const typedTemplate = template as PromptTemplateInput;
+                return {
+                  id: String(typedTemplate.id),
+                  name: String(typedTemplate.name),
+                  isDefault: Boolean(typedTemplate.isDefault)
+                };
+              })
+            : []
+        } : null
       };
       
       const result = await metadataService.setOrganizationSettings(newOrganizationSettings);
@@ -410,9 +454,29 @@ export const metadataRouter = router({
       const newIntegrationSettings = {
         integrationId: input.integrationId,
         syncFrequency: input.syncFrequency,
-        syncSettings: input.syncSettings,
-        webhookSettings: input.webhookSettings,
-        apiSettings: input.apiSettings
+        syncSettings: input.syncSettings ? {
+          lastSyncTime: input.syncSettings.lastSyncTime as string | undefined,
+          objectsToSync: Array.isArray(input.syncSettings.objectsToSync) 
+            ? input.syncSettings.objectsToSync as string[]
+            : undefined,
+          fieldMappings: input.syncSettings.fieldMappings as Record<string, string> | undefined
+        } : null,
+        webhookSettings: input.webhookSettings ? {
+          enabled: input.webhookSettings.enabled as boolean | undefined,
+          events: Array.isArray(input.webhookSettings.events) 
+            ? input.webhookSettings.events as string[]
+            : undefined,
+          url: input.webhookSettings.url as string | undefined,
+          secret: input.webhookSettings.secret as string | undefined
+        } : null,
+        apiSettings: input.apiSettings ? {
+          rateLimit: input.apiSettings.rateLimit as number | undefined,
+          timeout: input.apiSettings.timeout as number | undefined,
+          retryPolicy: input.apiSettings.retryPolicy as {
+            maxRetries: number;
+            backoffFactor: number;
+          } | undefined
+        } : null
       };
       
       const result = await metadataService.setIntegrationSettings(newIntegrationSettings);

@@ -3,18 +3,28 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format } from "date-fns";
-import { Key, Plus, Trash2, Copy, Check, AlertCircle } from "lucide-react";
+import { Key, Plus, Trash2, Copy, Check, AlertCircle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Dialog, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle,
+  DialogOverlay,
+  DialogPortal
+} from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 interface ApiToken {
   id: string;
@@ -24,6 +34,31 @@ interface ApiToken {
   lastUsedAt: string | null;
   expiresAt: string | null;
 }
+
+// Custom high z-index dialog components
+const HighZIndexDialogOverlay = ({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) => (
+  <DialogOverlay className={cn("z-[99]", className)} {...props} />
+);
+
+const HighZIndexDialogContent = ({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) => (
+  <DialogPortal>
+    <HighZIndexDialogOverlay />
+    <DialogPrimitive.Content
+      data-slot="dialog-content"
+      className={cn(
+        "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-[100] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+);
 
 export default function ApiTokensPage() {
   const { data: session } = useSession();
@@ -36,6 +71,10 @@ export default function ApiTokensPage() {
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Delete token confirmation
+  const [tokenToDelete, setTokenToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Fetch API tokens
   useEffect(() => {
@@ -100,6 +139,9 @@ export default function ApiTokensPage() {
       // Reset the form
       setNewTokenName("");
       
+      // Open the dialog after token creation is complete
+      setIsDialogOpen(true);
+      
       toast({
         title: "Success",
         description: "API token created successfully",
@@ -159,6 +201,21 @@ export default function ApiTokensPage() {
     });
   };
 
+  // Confirm token deletion
+  const confirmDeleteToken = (tokenId: string) => {
+    setTokenToDelete(tokenId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Execute token deletion
+  const executeDeleteToken = async () => {
+    if (!tokenToDelete) return;
+    
+    await handleDeleteToken(tokenToDelete);
+    setTokenToDelete(null);
+    setIsDeleteDialogOpen(false);
+  };
+
   return (
     <div className="container max-w-5xl py-8">
       <PageHeader
@@ -197,7 +254,7 @@ export default function ApiTokensPage() {
               <Button 
                 onClick={() => {
                   handleCreateToken();
-                  setIsDialogOpen(true);
+                  // Don't open the dialog here, it will be opened after token creation
                 }}
                 disabled={isCreatingToken || !newTokenName.trim()}
               >
@@ -217,9 +274,9 @@ export default function ApiTokensPage() {
           </CardContent>
         </Card>
         
-        {/* Token display dialog */}
+        {/* Token display dialog with higher z-index */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
+          <HighZIndexDialogContent>
             <DialogHeader>
               <DialogTitle>Your New API Token</DialogTitle>
               <DialogDescription>
@@ -257,7 +314,27 @@ export default function ApiTokensPage() {
             <DialogFooter>
               <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
             </DialogFooter>
-          </DialogContent>
+          </HighZIndexDialogContent>
+        </Dialog>
+        
+        {/* Delete confirmation dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <HighZIndexDialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete API Token</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this API token? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={executeDeleteToken}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </HighZIndexDialogContent>
         </Dialog>
         
         {/* Existing tokens list */}
@@ -307,7 +384,7 @@ export default function ApiTokensPage() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      onClick={() => handleDeleteToken(token.id)}
+                      onClick={() => confirmDeleteToken(token.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

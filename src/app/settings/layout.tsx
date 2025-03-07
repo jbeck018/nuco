@@ -57,21 +57,6 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       href: "/settings/profile",
       description: "Manage your personal information",
     },
-    {
-      title: "Account",
-      href: "/settings/account",
-      description: "Manage your account settings",
-    },
-    {
-      title: "Notifications",
-      href: "/settings/notifications",
-      description: "Configure notification preferences",
-    },
-    {
-      title: "Security",
-      href: "/settings/security",
-      description: "Update your security settings",
-    },
   ];
 
   const orgSettingsItems = selectedOrgId ? [
@@ -90,11 +75,11 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       href: `/settings/organization/${selectedOrgId}/billing`,
       description: "Manage subscription and billing",
     },
-    {
-      title: "Integrations",
-      href: `/settings/organization/${selectedOrgId}/integrations`,
-      description: "Manage connected services",
-    },
+    // {
+    //   title: "Integrations",
+    //   href: `/settings/organization/${selectedOrgId}/integrations`,
+    //   description: "Manage connected services",
+    // },
   ] : [];
 
   return (

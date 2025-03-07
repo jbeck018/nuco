@@ -16,7 +16,7 @@ if (!stripeSecretKey) {
 
 // Create a new Stripe instance with the API key
 export const stripe = new Stripe(stripeSecretKey || '', {
-  apiVersion: '2023-10-16', // Specify the Stripe API version
+  apiVersion: '2025-02-24.acacia', // Specify the Stripe API version
   appInfo: {
     name: 'Nuco-App',
     version: '0.1.0',

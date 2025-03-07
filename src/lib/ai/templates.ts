@@ -56,17 +56,6 @@ export const promptTemplateSchema = z.object({
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 
 /**
- * JSON-compatible value type
- */
-export type JsonValue = 
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: JsonValue }
-  | JsonValue[];
-
-/**
  * Template variable value type
  */
 export type TemplateVariableValue = 
@@ -76,7 +65,7 @@ export type TemplateVariableValue =
   | Date
   | string[]
   | number[]
-  | Record<string, JsonValue>
+  | Record<string, unknown>
   | null
   | undefined;
 

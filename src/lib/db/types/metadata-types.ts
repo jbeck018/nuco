@@ -1,14 +1,5 @@
 import { z } from 'zod';
 
-// Define a more specific type for JSON values
-export type JsonValue = 
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: JsonValue }
-  | JsonValue[];
-
 // Define specific types for user preferences
 export interface NotificationPreferences {
   email: boolean;
@@ -21,7 +12,7 @@ export interface DashboardWidget {
   id: string;
   type: string;
   position: { x: number; y: number; w: number; h: number };
-  settings?: Record<string, JsonValue>;
+  settings?: Record<string, unknown>;
 }
 
 export interface DashboardLayout {

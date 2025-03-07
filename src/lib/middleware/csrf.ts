@@ -23,7 +23,7 @@ export async function csrfProtection(req: NextRequest): Promise<NextResponse | u
   
   try {
     // Get the session
-    const session = await getSession(req);
+    const session = await getSession();
     
     // If not logged in, no need to check CSRF
     if (!session.isLoggedIn) {

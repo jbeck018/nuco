@@ -6,7 +6,6 @@
  */
 import { pgTable, uuid, varchar, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { JsonValue } from '../types/metadata-types';
 
 /**
  * Entity-level metadata table
@@ -17,7 +16,7 @@ export const metadata = pgTable('metadata', {
   entityType: varchar('entity_type', { length: 50 }).notNull(), // user, organization, integration, etc.
   entityId: uuid('entity_id').notNull(),
   key: varchar('key', { length: 100 }).notNull(),
-  value: jsonb('value').notNull().$type<Record<string, JsonValue>>(), // Flexible JSON value
+  value: jsonb('value').notNull().$type<Record<string, unknown>>(), // Flexible JSON value
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

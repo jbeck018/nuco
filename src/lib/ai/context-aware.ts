@@ -6,7 +6,7 @@
  */
 
 import { Message } from './service';
-import { AiSettings } from '@/lib/db/schema/metadata';
+import { AiSettings } from '@/lib/db/types/metadata-types';
 import { PromptTemplate } from './templates';
 import { ContextSettings } from '@/lib/utils/ai-utils';
 

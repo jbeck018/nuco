@@ -1,5 +1,5 @@
+import { FileWarningIcon } from "lucide-react";
 import { ReactNode } from "react";
-import { Plugin } from "lucide-react";
 
 interface EmptyPlaceholderProps {
   children: ReactNode;
@@ -32,7 +32,7 @@ EmptyPlaceholder.Icon = function EmptyPlaceholderIcon({
 }: EmptyPlaceholderIconProps) {
   return (
     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-      {name === "plugin" && <Plugin className={`h-10 w-10 ${className}`} />}
+      {name === "plugin" && <FileWarningIcon className={`h-10 w-10 ${className}`} />}
     </div>
   );
 };

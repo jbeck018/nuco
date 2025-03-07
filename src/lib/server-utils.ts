@@ -16,11 +16,17 @@ export const getHeaders = cache(() => {
 /**
  * Get the current request's URL
  */
-export const getRequestUrl = cache(() => {
-  const headersList = getHeaders();
-  const host = headersList.get('host') || '';
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${host}`;
+export const getRequestUrl = cache(async () => {
+  try {
+    // headers() returns a Promise<ReadonlyHeaders> in the latest Next.js
+    const headersList = await headers();
+    const host = headersList.get('host') || '';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    return `${protocol}://${host}`;
+  } catch (error) {
+    console.error('Error getting request URL:', error);
+    return '';
+  }
 });
 
 /**
@@ -28,6 +34,7 @@ export const getRequestUrl = cache(() => {
  * @param fn The function to cache
  * @returns The cached function
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createServerAction<T extends (...args: any[]) => Promise<any>>(fn: T): T {
   return cache(fn) as T;
 }
@@ -55,6 +62,7 @@ export function preload<T>(promise: Promise<T>): void {
  * @param promises The promises to fetch in parallel
  * @returns The resolved promises
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function parallelFetch<T extends Promise<any>[]>(
   ...promises: T
 ): Promise<{ [K in keyof T]: Awaited<T[K]> }> {

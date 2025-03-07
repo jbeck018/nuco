@@ -20,7 +20,6 @@ import { useTRPC } from '@/lib/trpc/trpc';
 import { generateCompletion } from '@/lib/ai/service';
 import { useAiPreferences } from '@/hooks/useAiPreferences';
 import { applyContextAwarePrompting } from '@/lib/ai/context-aware';
-import { streamToString } from '@/lib/utils';
 import { 
   getDefaultModel, 
   getMaxTokens, 
@@ -151,10 +150,13 @@ export function ChatInterface({
       
       // Process the streaming response
       try {
-        // Use streamToString utility to handle the streaming
-        await streamToString(response, (chunk) => {
-          setStreamingMessage(prev => prev + chunk);
-        });
+        // Use the textStream from the response to handle streaming
+        const { textStream } = response;
+        
+        // Process each chunk of the stream
+        for await (const textPart of textStream) {
+          setStreamingMessage(prev => prev + textPart);
+        }
         
         // After streaming is complete, add the message to the UI and save to DB
         const assistantMessage: Message = {

@@ -76,7 +76,10 @@ export const useOrganizationSettings = (organizationId: string) => {
       if (previousData) {
         queryClient.setQueryData(
           trpc.metadata.getOrganizationSettings.queryKey({ organizationId }),
-          (oldData: OrganizationSettings | undefined) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (input: any) => {
+            // Cast input to OrganizationSettings
+            const oldData = input as OrganizationSettings | undefined;
             if (!oldData) return oldData;
             
             // Create updated data by merging old and new

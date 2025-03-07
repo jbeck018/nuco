@@ -243,7 +243,10 @@ export async function analyzeTextSentimentAI(
     );
     
     // Convert stream to string
-    const responseText = await streamToString(stream);
+    let responseText = '';
+    await streamToString(stream, (chunk) => {
+      responseText += chunk;
+    });
     
     // Parse the JSON response
     try {

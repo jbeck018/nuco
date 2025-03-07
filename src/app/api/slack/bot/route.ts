@@ -134,9 +134,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         'chat:write.public',
         'incoming-webhook',
       ],
-      accessToken: config.access_token as string,
-      refreshToken: config.refresh_token as string,
-      expiresAt: config.expires_at as number,
       teamId: config.team_id as string,
       teamName: config.team_name as string,
       botUserId: config.bot_user_id as string,
@@ -297,7 +294,7 @@ async function processMessage(event: SlackMessageEvent, slack: SlackIntegration)
     
     // Add reactions based on message sentiment
     const messageText = event.text;
-    const reactions = await getMessageReactions(messageText, false); // Use simple analysis for performance
+    const reactions = await getMessageReactions(messageText, { useAI: false }); // Use simple analysis for performance
     
     // Add up to 2 reactions (to avoid cluttering the message)
     for (let i = 0; i < Math.min(2, reactions.length); i++) {
@@ -454,7 +451,7 @@ async function processAppMention(event: SlackAppMentionEvent, slack: SlackIntegr
     });
     
     // Add appropriate reactions based on message sentiment
-    const reactions = await getMessageReactions(messageText, true); // Use AI for mentions
+    const reactions = await getMessageReactions(messageText, { useAI: true }); // Use AI for mentions
     
     // Add reactions
     for (let i = 0; i < Math.min(2, reactions.length); i++) {

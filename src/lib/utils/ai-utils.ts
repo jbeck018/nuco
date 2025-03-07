@@ -4,9 +4,8 @@
  * Utility functions for working with AI preferences and settings
  * with proper type safety and validation.
  */
-
-import { AiSettings } from '@/lib/db/schema/metadata';
 import { isValidAiSettings } from '@/hooks/useAiPreferences';
+import { AiSettings } from '@/lib/db/types/metadata-types';
 
 // Define the context settings type for reuse
 export interface ContextSettings {
