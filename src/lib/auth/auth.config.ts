@@ -125,6 +125,12 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.SALESFORCE_CLIENT_ID!,
       clientSecret: process.env.SALESFORCE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          scope: "openid id profile email address phone full",
+        }
+      },
+      // issuer: process.env.SALESFORCE_URL,
     }),
     HubSpot({
       clientId: process.env.HUBSPOT_CLIENT_ID!,

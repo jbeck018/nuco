@@ -174,7 +174,7 @@ export function MainNav({ children }: MainNavProps) {
       <div className="flex flex-col min-h-screen">
         {/* Top navigation bar */}
         <nav className="border-b bg-background z-10">
-          <div className="container mx-auto flex items-center justify-between px-4 py-3">
+          <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-2">
                 <span className="text-xl font-bold">Nuco</span>
@@ -312,7 +312,7 @@ export function MainNav({ children }: MainNavProps) {
   return (
     <>
       <nav className="border-b bg-background">
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
+        <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
               <span className="text-xl font-bold">Nuco</span>
