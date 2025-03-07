@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { integrations } from './integrations';
 import { SyncSettings, WebhookSettings, ApiSettings } from '../types/metadata-types';
-import { createSelectSchema } from 'drizzle-zod';
+import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 /**
  * Integration settings table
  * A specialized metadata table for integration-specific settings
@@ -21,6 +21,7 @@ export const integrationSettings = pgTable('integration_settings', {
 
 
 export const selectIntegrationSettingsSchema = createSelectSchema(integrationSettings);
+export const insertIntegrationSettingsSchema = createInsertSchema(integrationSettings);
 
 export type IntegrationSettings = typeof integrationSettings.$inferSelect;
 export type NewIntegrationSettings = typeof integrationSettings.$inferInsert;

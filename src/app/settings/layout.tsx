@@ -37,18 +37,19 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     redirect("/auth/login");
   }
 
-  useEffect(() => {
-    if (selectedOrgId) {
-      setCurrentOrganizationById(selectedOrgId);
-    }
-  }, [selectedOrgId, setCurrentOrganizationById]);
-
   // Update selected org when current org changes
   useEffect(() => {
     if (currentOrganization?.id && currentOrganization.id !== selectedOrgId) {
       setSelectedOrgId(currentOrganization.id);
     }
   }, [currentOrganization, selectedOrgId]);
+
+  // Custom organization change handler for settings
+  const handleOrganizationChange = (orgId: string) => {
+    setSelectedOrgId(orgId);
+    // Use the noRedirect option to prevent redirection
+    setCurrentOrganizationById(orgId, { noRedirect: true });
+  };
 
   const personalSettingsItems = [
     {
@@ -73,7 +74,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     },
   ];
 
-  const orgSettingsItems = [
+  const orgSettingsItems = selectedOrgId ? [
     {
       title: "General",
       href: `/settings/organization/${selectedOrgId}/general`,
@@ -94,25 +95,25 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       href: `/settings/organization/${selectedOrgId}/integrations`,
       description: "Manage connected services",
     },
-  ];
+  ] : [];
 
   return (
     <div className="container mx-auto py-8">
       <div className="flex flex-col gap-8 md:flex-row">
-        <aside className="md:w-64">
+        <aside className="md:w-72">
           <div className="sticky top-8">
-            <div className="mb-4">
+            <div className="mb-6 px-4">
               <h2 className="text-xl font-bold">Settings</h2>
               <p className="text-sm text-muted-foreground">
                 Manage your account and organizations
               </p>
             </div>
 
-            <nav className="flex flex-col space-y-6">
+            <nav className="flex flex-col space-y-6 rounded-lg border bg-card shadow-sm">
               {/* Personal Settings Section */}
-              <div>
-                <h3 className="mb-2 font-medium">Personal Settings</h3>
-                <div className="flex flex-col space-y-1">
+              <div className="p-4">
+                <h3 className="mb-3 font-medium text-sm uppercase tracking-wider text-muted-foreground">Personal Settings</h3>
+                <div className="flex flex-col -mx-2">
                   {personalSettingsItems.map((item) => {
                     const isActive = pathname === item.href;
                     
@@ -121,15 +122,17 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
                         key={item.href}
                         variant={isActive ? "default" : "ghost"}
                         className={cn(
-                          "justify-start h-auto py-2",
-                          isActive ? "bg-primary text-primary-foreground" : ""
+                          "justify-start h-auto py-3 px-3 mb-1 rounded-md",
+                          isActive 
+                            ? "bg-primary text-primary-foreground" 
+                            : "hover:bg-accent"
                         )}
                         asChild
                       >
                         <Link href={item.href}>
                           <div className="flex flex-col items-start">
-                            <span>{item.title}</span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="font-medium">{item.title}</span>
+                            <span className="text-xs text-muted-foreground mt-1">
                               {item.description}
                             </span>
                           </div>
@@ -143,16 +146,16 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
               <Separator />
 
               {/* Organization Settings Section */}
-              <div>
-                <div className="flex flex-col space-y-2 mb-3">
-                  <h3 className="font-medium">Organization Settings</h3>
+              <div className="p-4">
+                <h3 className="mb-3 font-medium text-sm uppercase tracking-wider text-muted-foreground">Organization Settings</h3>
+                <div className="mb-4 bg-accent/50 p-3 rounded-md">
                   {organizations && organizations.length > 0 ? (
                     <Select
                       value={selectedOrgId}
-                      onValueChange={(value) => setSelectedOrgId(value)}
+                      onValueChange={(value) => handleOrganizationChange(value)}
                       disabled={!organizations.length}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-accent-foreground/20">
                         <SelectValue placeholder="Select organization" />
                       </SelectTrigger>
                       <SelectContent>
@@ -171,7 +174,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
                 </div>
 
                 {selectedOrgId && (
-                  <div className="flex flex-col space-y-1">
+                  <div className="flex flex-col -mx-2">
                     {orgSettingsItems.map((item) => {
                       const isActive = pathname === item.href;
                       
@@ -180,16 +183,18 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
                           key={item.href}
                           variant={isActive ? "default" : "ghost"}
                           className={cn(
-                            "justify-start h-auto py-2",
-                            isActive ? "bg-primary text-primary-foreground" : ""
+                            "justify-start h-auto py-3 px-3 mb-1 rounded-md",
+                            isActive 
+                              ? "bg-primary text-primary-foreground" 
+                              : "hover:bg-accent"
                           )}
                           asChild
                           disabled={!selectedOrgId}
                         >
                           <Link href={item.href}>
                             <div className="flex flex-col items-start">
-                              <span>{item.title}</span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="font-medium">{item.title}</span>
+                              <span className="text-xs text-muted-foreground mt-1">
                                 {item.description}
                               </span>
                             </div>
@@ -204,7 +209,9 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
           </div>
         </aside>
         
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          {children}
+        </main>
       </div>
     </div>
   );

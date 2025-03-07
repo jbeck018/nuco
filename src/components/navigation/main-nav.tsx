@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardShell } from "../dashboard/dashboard-shell";
 
 interface NavItem {
   title: string;
@@ -31,14 +33,16 @@ export function MainNav({ children }: MainNavProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const { toast } = useToast();
   
   const isAuthenticated = status === "authenticated";
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                           pathname.startsWith('/chat') || 
                           pathname.startsWith('/settings') || 
-                          pathname.startsWith('/integrations');
+                          pathname.startsWith('/integrations') ||
+                          pathname.startsWith('/api-tokens') ||
+                          pathname.startsWith('/chat-templates');
   
   // Redirect unauthenticated users from dashboard routes to login
   useEffect(() => {
@@ -114,7 +118,7 @@ export function MainNav({ children }: MainNavProps) {
     },
     {
       title: "API Tokens",
-      href: "/settings/api-tokens",
+      href: "/api-tokens",
       icon: <Key className="h-5 w-5" />,
       requireAuth: true,
       isDashboardItem: true,
@@ -158,7 +162,57 @@ export function MainNav({ children }: MainNavProps) {
   
   // Show loading state while checking authentication
   if (isDashboardRoute && status === "loading") {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="flex flex-col h-screen">
+        {/* Top navigation skeleton */}
+        <div className="border-b bg-background z-10">
+          <div className="w-full flex items-center justify-between px-4 py-3">
+            <div className="flex items-center">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl font-bold">Nuco</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Skeleton className="h-9 w-9 rounded-md" />
+              <Skeleton className="h-9 w-24 rounded-md" />
+            </div>
+          </div>
+        </div>
+        
+        {/* Main content with sidebar skeleton */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar skeleton */}
+          <div className="border-r bg-background w-64 py-4">
+            <div className="space-y-2 px-3">
+              {[...Array(6)].map((_, i) => (
+                <Skeleton 
+                  key={i} 
+                  className="h-10 rounded-md"
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Main content skeleton */}
+          <div className="flex-1 p-6">
+            <div className="flex flex-col space-y-6 h-full">
+              <Skeleton className="h-12 w-48 rounded-md" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton 
+                    key={i} 
+                    className="h-40 rounded-lg"
+                    style={{ animationDelay: `${i * 0.1}s` }}
+                  />
+                ))}
+              </div>
+              <Skeleton className="h-64 w-full rounded-lg mt-6" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
   
   // Redirect unauthenticated users from dashboard routes
@@ -171,7 +225,7 @@ export function MainNav({ children }: MainNavProps) {
   // Render sidebar for dashboard routes
   if (isDashboardRoute && isAuthenticated) {
     return (
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col h-screen overflow-hidden">
         {/* Top navigation bar */}
         <nav className="border-b bg-background z-10">
           <div className="w-full flex items-center justify-between px-4 py-3">
@@ -251,12 +305,12 @@ export function MainNav({ children }: MainNavProps) {
         </nav>
         
         {/* Main content with sidebar */}
-        <div className="flex flex-1 relative">
+        <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
-          <aside 
+          <aside
             className={cn(
-              "bg-background border-r transition-all duration-300 ease-in-out hidden md:block h-[calc(100vh-57px)] sticky top-[57px]",
-              sidebarCollapsed ? "w-[70px]" : "w-[240px]"
+              "border-r bg-background transition-all duration-300 ease-in-out",
+              sidebarCollapsed ? "w-16" : "w-64"
             )}
           >
             <div className="flex flex-col h-full py-4">
@@ -300,7 +354,9 @@ export function MainNav({ children }: MainNavProps) {
           {/* Main content */}
           <div className="flex-1 transition-all duration-300 ease-in-out">
             <main className="md:pl-0">
-              {children}
+              <DashboardShell>  
+                {children}
+              </DashboardShell>
             </main>
           </div>
         </div>

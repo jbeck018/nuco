@@ -57,7 +57,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   }));
 
   return (
-    <div className="container flex h-[calc(100vh-4rem)] max-w-4xl flex-col py-4">
+    <div className="h-full w-full max-w-6xl mx-auto">
       <ChatInterface
         conversationId={params.id}
         initialMessages={formattedMessages}

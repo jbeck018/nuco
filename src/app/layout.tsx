@@ -1,17 +1,16 @@
 "use client";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "@/components/ui/toaster";
 import { MainNav } from "@/components/navigation/main-nav";
-import { SessionProvider } from "next-auth/react";
-import { TRPCProvider } from "@/lib/trpc/trpc";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AppRouter } from "@/lib/trpc/router";
+import { QueryClient } from '@tanstack/react-query';
+import { Providers } from "@/components/providers";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -87,65 +86,73 @@ export default function RootLayout({
   const [trpcClient] = useState(() => getTrpcClient());
   const pathname = usePathname();
   
+  // Update the check to include all routes that use the organization context
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                           pathname.startsWith('/chat') || 
                           pathname.startsWith('/settings') || 
-                          pathname.startsWith('/integrations');
+                          pathname.startsWith('/integrations') ||
+                          pathname.startsWith('/org');
+  
+  // Extract organization slug from pathname if it's an org route
+  let initialOrganizationSlug: string | undefined;
+  if (pathname.startsWith('/org/')) {
+    const parts = pathname.split('/');
+    if (parts.length >= 3) {
+      initialOrganizationSlug = parts[2];
+    }
+  }
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
+      <body className={`${inter.className} overflow-hidden`}>
+        <Providers 
+          queryClient={queryClient} 
+          trpcClient={trpcClient} 
+          initialOrganizationSlug={initialOrganizationSlug}
         >
-          <SessionProvider>
-            <QueryClientProvider client={queryClient}>
-              <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-                <MainNav>
-                  {!isDashboardRoute && (
-                    <div className="flex min-h-screen flex-col">
-                      <main className="flex-1">{children}</main>
-                      <footer className="border-t py-6">
-                        <div className="container mx-auto px-4">
-                          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-                            <p className="text-center text-sm text-muted-foreground">
-                              &copy; {new Date().getFullYear()} Nuco. All rights reserved.
-                            </p>
-                            <div className="flex items-center space-x-4">
-                              <a
-                                href="#"
-                                className="text-sm text-muted-foreground hover:underline"
-                              >
-                                Terms
-                              </a>
-                              <a
-                                href="#"
-                                className="text-sm text-muted-foreground hover:underline"
-                              >
-                                Privacy
-                              </a>
-                              <a
-                                href="#"
-                                className="text-sm text-muted-foreground hover:underline"
-                              >
-                                Contact
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      </footer>
+          <MainNav>
+            {!isDashboardRoute && (
+              <div className="flex min-h-screen flex-col">
+                <main className="flex-1">{children}</main>
+                <footer className="border-t py-6">
+                  <div className="container mx-auto px-4">
+                    <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+                      <p className="text-center text-sm text-muted-foreground">
+                        &copy; {new Date().getFullYear()} Nuco. All rights reserved.
+                      </p>
+                      <div className="flex items-center space-x-4">
+                        <a
+                          href="#"
+                          className="text-sm text-muted-foreground hover:underline"
+                        >
+                          Terms
+                        </a>
+                        <a
+                          href="#"
+                          className="text-sm text-muted-foreground hover:underline"
+                        >
+                          Privacy
+                        </a>
+                        <a
+                          href="#"
+                          className="text-sm text-muted-foreground hover:underline"
+                        >
+                          Contact
+                        </a>
+                      </div>
                     </div>
-                  )}
-                  {isDashboardRoute && children}
-                </MainNav>
-                <Toaster />
-              </TRPCProvider>
-            </QueryClientProvider>
-          </SessionProvider>
-        </ThemeProvider>
+                  </div>
+                </footer>
+              </div>
+            )}
+            {isDashboardRoute && (
+              <DashboardShell>
+                {children}
+              </DashboardShell>
+            )}
+          </MainNav>
+          <Toaster />
+        </Providers>
         <Analytics />
       </body>
     </html>

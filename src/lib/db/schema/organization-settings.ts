@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations';
 import { SlackSettings, AiSettings } from '../types/metadata-types';
-import { createSelectSchema } from 'drizzle-zod';
+import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 
 /**
  * Organization settings table
@@ -21,6 +21,7 @@ export const organizationSettings = pgTable('organization_settings', {
 }));
 
 export const selectOrganizationSettingsSchema = createSelectSchema(organizationSettings);
+export const insertOrganizationSettingsSchema = createInsertSchema(organizationSettings);
 
 export type OrganizationSettings = typeof organizationSettings.$inferSelect;
 export type NewOrganizationSettings = typeof organizationSettings.$inferInsert;

@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { conversations } from '@/lib/db/schema';
+import { conversations, messages } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';

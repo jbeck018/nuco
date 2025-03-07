@@ -11,7 +11,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { DashboardHeader } from "@/components/dashboard/header";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { EmptyPlaceholder } from "@/components/dashboard/empty-placeholder";
 
 interface MarketplaceExtension {
@@ -236,7 +235,7 @@ export default function MarketplacePage() {
   };
 
   return (
-    <DashboardShell>
+    <>
       <DashboardHeader
         heading="Extension Marketplace"
         text="Discover and install extensions to enhance your Nuco experience."
@@ -367,6 +366,6 @@ export default function MarketplacePage() {
           </div>
         )}
       </div>
-    </DashboardShell>
+    </>
   );
 } 

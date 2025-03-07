@@ -8,7 +8,8 @@ import { TRPCError } from '@trpc/server';
 import { db } from '@/lib/db';
 import { integrations } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { IntegrationFactory } from '@/lib/integrations';
+import { IntegrationFactory, IntegrationType } from '@/lib/integrations';
+import { users } from '@/lib/db/schema';
 
 // Define the integration input schema
 const integrationSchema = z.object({
@@ -40,19 +41,43 @@ export const integrationRouter = router({
       const userId = ctx.session.user.id;
       
       try {
-        let userIntegrations;
+        let userIntegrations = [];
         
         if (input?.organizationId) {
-          // If organizationId is provided, filter integrations by organization
-          userIntegrations = await db.select().from(integrations)
-            .where(and(
-              eq(integrations.userId, userId),
-              eq(integrations.organizationId, input.organizationId)
-            ));
+          // Get both user's personal integrations and organization integrations
+          const orgIntegrations = await db.select({
+            integration: integrations,
+            ownerName: users.name,
+            ownerId: users.id
+          })
+            .from(integrations)
+            .leftJoin(users, eq(integrations.userId, users.id))
+            .where(eq(integrations.organizationId, input.organizationId));
+            
+          // Combine both sets of integrations
+          userIntegrations = [
+            ...orgIntegrations.map(({ integration, ownerName, ownerId }) => ({
+              ...integration,
+              owner: {
+                id: ownerId,
+                name: ownerName || 'Unknown',
+                isCurrentUser: ownerId === userId
+              }
+            }))
+          ];
         } else {
-          // Otherwise, get all integrations for the user
-          userIntegrations = await db.select().from(integrations)
+          // Get only the user's personal integrations
+          const personalIntegrations = await db.select().from(integrations)
             .where(eq(integrations.userId, userId));
+            
+          userIntegrations = personalIntegrations.map(integration => ({
+            ...integration,
+            owner: {
+              id: userId,
+              name: ctx.session.user.name || 'You',
+              isCurrentUser: true
+            }
+          }));
         }
         
         return userIntegrations.map(integration => ({
@@ -64,12 +89,80 @@ export const integrationRouter = router({
           config: integration.config,
           createdAt: integration.createdAt.toISOString(),
           updatedAt: integration.updatedAt.toISOString(),
+          owner: integration.owner
         }));
       } catch (error) {
         console.error('Error fetching integrations:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch integrations',
+        });
+      }
+    }),
+  
+  /**
+   * Get all available integration types with their details
+   */
+  getAvailableTypes: protectedProcedure
+    .query(async () => {
+      try {
+        // Get all available integration types
+        const integrationTypes = IntegrationFactory.getAvailableIntegrations();
+        
+        // Get details for each integration type
+        return integrationTypes.map(type => {
+          const details = IntegrationFactory.getIntegrationDetails(type);
+          return {
+            type,
+            name: details.name,
+            description: details.description,
+            icon: details.icon,
+            documentationUrl: details.documentationUrl,
+          };
+        });
+      } catch (error) {
+        console.error('Error fetching available integration types:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch available integration types',
+        });
+      }
+    }),
+  
+  /**
+   * Get authentication status for all integration types
+   */
+  getAuthStatus: protectedProcedure
+    .query(async () => {
+      try {
+        // Get all available integration types
+        const integrationTypes = IntegrationFactory.getAvailableIntegrations();
+        
+        // Create an object to store auth status for each integration type
+        const authStatus: Record<IntegrationType, { isAuthenticated: boolean; accountId?: string }> = 
+          Object.fromEntries(
+            integrationTypes.map(type => [type, { isAuthenticated: false }])
+          ) as Record<IntegrationType, { isAuthenticated: boolean; accountId?: string }>;
+        
+        // Check auth status for each integration type
+        await Promise.all(
+          integrationTypes.map(async (type) => {
+            try {
+              const status = await IntegrationFactory.getAuthStatus(type);
+              authStatus[type] = status;
+            } catch (error) {
+              console.error(`Error checking auth status for ${type}:`, error);
+              authStatus[type] = { isAuthenticated: false };
+            }
+          })
+        );
+        
+        return authStatus;
+      } catch (error) {
+        console.error('Error fetching auth status:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch authentication status',
         });
       }
     }),
@@ -374,24 +467,4 @@ export const integrationRouter = router({
         });
       }
     }),
-    
-  /**
-   * Get available integration types
-   */
-  getAvailableTypes: protectedProcedure.query(() => {
-    try {
-      const types = IntegrationFactory.getAvailableIntegrations();
-      
-      return types.map(type => ({
-        type,
-        ...IntegrationFactory.getIntegrationDetails(type),
-      }));
-    } catch (error) {
-      console.error('Error fetching integration types:', error);
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch integration types',
-      });
-    }
-  }),
 }); 

@@ -16,7 +16,6 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DashboardHeader } from "@/components/dashboard/header";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 interface ExtensionSetting {
   type: string;
@@ -196,7 +195,7 @@ export default function ExtensionSettingsPage({ params }: { params: { id: string
 
   if (loading) {
     return (
-      <DashboardShell>
+      <>
         <DashboardHeader
           heading="Extension Settings"
           text="Loading extension settings..."
@@ -210,13 +209,13 @@ export default function ExtensionSettingsPage({ params }: { params: { id: string
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
           <span className="ml-2">Loading settings...</span>
         </div>
-      </DashboardShell>
+      </>
     );
   }
 
   if (error || !extension) {
     return (
-      <DashboardShell>
+      <>
         <DashboardHeader
           heading="Extension Settings"
           text="Manage extension settings"
@@ -231,13 +230,13 @@ export default function ExtensionSettingsPage({ params }: { params: { id: string
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error || "Failed to load extension"}</AlertDescription>
         </Alert>
-      </DashboardShell>
+      </>
     );
   }
 
   if (!extension.settings.configurable) {
     return (
-      <DashboardShell>
+      <>
         <DashboardHeader
           heading={`${extension.name} Settings`}
           text="Manage extension settings"
@@ -255,12 +254,12 @@ export default function ExtensionSettingsPage({ params }: { params: { id: string
             </CardDescription>
           </CardHeader>
         </Card>
-      </DashboardShell>
+      </>
     );
   }
 
   return (
-    <DashboardShell>
+    <>
       <DashboardHeader
         heading={`${extension.name} Settings`}
         text="Configure extension settings"
@@ -398,6 +397,6 @@ export default function ExtensionSettingsPage({ params }: { params: { id: string
           </Form>
         </CardContent>
       </Card>
-    </DashboardShell>
+    </>
   );
 } 

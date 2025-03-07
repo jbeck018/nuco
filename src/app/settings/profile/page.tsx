@@ -123,7 +123,7 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <div>
       <Card>
         <CardHeader>
           <CardTitle>Profile Settings</CardTitle>

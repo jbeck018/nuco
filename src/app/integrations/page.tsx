@@ -34,9 +34,12 @@ export default async function IntegrationsPage({
     redirect('/auth/login');
   }
 
+  // Resolve searchParams if it's a promise
+  const resolvedSearchParams = searchParams instanceof Promise ? await searchParams : searchParams;
+
   // Extract success and error messages from search params
-  const successMessage = searchParams.success as string | undefined;
-  const errorMessage = searchParams.error as string | undefined;
+  const successMessage = resolvedSearchParams.success as string | undefined;
+  const errorMessage = resolvedSearchParams.error as string | undefined;
 
   return (
     <div className="container mx-auto py-8">

@@ -1,64 +1,87 @@
 /* cSpell:ignore SOQL sobjects */
-import { OAuth2Integration, OAuth2IntegrationConfig } from './oauth2-base';
+import { auth, signIn, signOut } from '@/lib/auth';
+import { Integration, ExtendedSession, AuthenticationError, isAuthenticatedWithProvider } from './oauth2-base';
 
 /**
- * Salesforce OAuth2 integration
- * This class implements the OAuth2 flow for Salesforce
+ * Salesforce integration using NextAuth
+ * This class implements Salesforce API interactions using NextAuth for authentication
  */
-export class SalesforceIntegration extends OAuth2Integration {
-  private revokeTokenUrl: string;
-  private userInfoUrl: string;
+export class SalesforceIntegration implements Integration {
+  private apiVersion = 'v56.0';
   
   /**
    * Constructor for SalesforceIntegration
-   * @param config - Configuration for the Salesforce integration
    */
-  constructor(config: Partial<OAuth2IntegrationConfig> = {}) {
-    // Default configuration for Salesforce
-    const defaultConfig: OAuth2IntegrationConfig = {
-      clientId: process.env.SALESFORCE_CLIENT_ID || '',
-      clientSecret: process.env.SALESFORCE_CLIENT_SECRET || '',
-      redirectUri: `${process.env.NEXTAUTH_URL}/api/integrations/salesforce/callback`,
-      scopes: ['api', 'refresh_token'],
-      authorizationUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-      tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-    };
-    
-    // Merge default config with provided config
-    super({ ...defaultConfig, ...config });
-    
-    // Salesforce-specific endpoints
-    this.revokeTokenUrl = 'https://login.salesforce.com/services/oauth2/revoke';
-    this.userInfoUrl = 'https://login.salesforce.com/services/oauth2/userinfo';
+  constructor() {
+    // No configuration needed as we use NextAuth
   }
   
   /**
-   * Revoke a Salesforce access token
-   * @param token - The access token to revoke
-   * @returns True if the token was revoked successfully
+   * Get the authentication status for Salesforce
+   * @returns Authentication status
    */
-  async revokeToken(token: string): Promise<boolean> {
-    const params = new URLSearchParams();
-    params.append('token', token);
+  async getAuthStatus(): Promise<{ isAuthenticated: boolean; accountId?: string }> {
+    const session = await auth() as ExtendedSession;
     
-    const response = await fetch(this.revokeTokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
+    if (!session?.user) {
+      return { isAuthenticated: false };
+    }
     
-    return response.ok;
+    // Check if the user is authenticated with Salesforce
+    if (isAuthenticatedWithProvider(session, 'salesforce')) {
+      return { 
+        isAuthenticated: true,
+        accountId: session.user.id
+      };
+    }
+    
+    return { isAuthenticated: false };
+  }
+  
+  /**
+   * Disconnect from Salesforce
+   * @returns True if disconnected successfully
+   */
+  async disconnect(): Promise<boolean> {
+    try {
+      await signOut({ redirect: false });
+      return true;
+    } catch (error) {
+      console.error('Failed to disconnect from Salesforce:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Authenticate with Salesforce
+   * @returns True if authentication was initiated
+   */
+  async authenticate(): Promise<boolean> {
+    try {
+      await signIn('salesforce', { redirect: true });
+      return true;
+    } catch (error) {
+      console.error('Failed to authenticate with Salesforce:', error);
+      return false;
+    }
   }
   
   /**
    * Get user information from Salesforce
-   * @param accessToken - The access token
    * @returns User information from Salesforce
    */
-  async getUserInfo(accessToken: string): Promise<SalesforceUserInfo> {
-    const response = await fetch(this.userInfoUrl, {
+  async getUserInfo(): Promise<SalesforceUserInfo | null> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'salesforce')) {
+      throw new AuthenticationError('Not authenticated with Salesforce');
+    }
+    
+    const accessToken = session.token!.accessToken!;
+    
+    // Get instance URL from user info endpoint
+    const userInfoUrl = 'https://login.salesforce.com/services/oauth2/userinfo';
+    const response = await fetch(userInfoUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -73,14 +96,27 @@ export class SalesforceIntegration extends OAuth2Integration {
   
   /**
    * Query Salesforce data using SOQL
-   * @param accessToken - The access token
-   * @param instanceUrl - The Salesforce instance URL
    * @param query - The SOQL query
    * @returns The query results
    */
-  async query(accessToken: string, instanceUrl: string, query: string): Promise<SalesforceQueryResult> {
+  async query(query: string): Promise<SalesforceQueryResult> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'salesforce')) {
+      throw new AuthenticationError('Not authenticated with Salesforce');
+    }
+    
+    const accessToken = session.token!.accessToken!;
+    
+    // Get instance URL from user info
+    const userInfo = await this.getUserInfo();
+    if (!userInfo?.instance_url) {
+      throw new Error('Failed to get Salesforce instance URL');
+    }
+    
+    const instanceUrl = userInfo.instance_url;
     const encodedQuery = encodeURIComponent(query);
-    const url = `${instanceUrl}/services/data/v56.0/query?q=${encodedQuery}`;
+    const url = `${instanceUrl}/services/data/${this.apiVersion}/query?q=${encodedQuery}`;
     
     const response = await fetch(url, {
       headers: {
@@ -98,19 +134,30 @@ export class SalesforceIntegration extends OAuth2Integration {
   
   /**
    * Create a record in Salesforce
-   * @param accessToken - The access token
-   * @param instanceUrl - The Salesforce instance URL
    * @param objectName - The Salesforce object name (e.g., 'Account')
    * @param data - The record data
    * @returns The created record
    */
   async createRecord(
-    accessToken: string,
-    instanceUrl: string,
     objectName: string,
     data: Record<string, unknown>
   ): Promise<SalesforceCreateResult> {
-    const url = `${instanceUrl}/services/data/v56.0/sobjects/${objectName}`;
+    const session = await auth() as ExtendedSession;
+    
+    if (!session?.token?.accessToken || session.token?.provider !== 'salesforce') {
+      throw new Error('Not authenticated with Salesforce');
+    }
+    
+    const accessToken = session.token.accessToken;
+    
+    // Get instance URL from user info
+    const userInfo = await this.getUserInfo();
+    if (!userInfo?.instance_url) {
+      throw new Error('Failed to get Salesforce instance URL');
+    }
+    
+    const instanceUrl = userInfo.instance_url;
+    const url = `${instanceUrl}/services/data/${this.apiVersion}/sobjects/${objectName}`;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -139,6 +186,7 @@ export interface SalesforceUserInfo {
   username: string;
   display_name: string;
   email: string;
+  instance_url?: string;
   [key: string]: unknown;
 }
 

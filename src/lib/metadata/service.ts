@@ -7,15 +7,21 @@
 import { db } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { 
-  metadata, 
-  userPreferences, 
-  organizationSettings, 
-  integrationSettings,
+  metadata,
   NewMetadata,
-  NewUserPreferences,
-  NewOrganizationSettings,
-  NewIntegrationSettings,
 } from '@/lib/db/schema/metadata';
+import {
+  userPreferences,
+  NewUserPreferences,
+} from '@/lib/db/schema/user-preferences';
+import {
+  organizationSettings,
+  NewOrganizationSettings,
+} from '@/lib/db/schema/organization-settings';
+import {
+  integrationSettings,
+  NewIntegrationSettings,
+} from '@/lib/db/schema/integration-settings';
 
 /**
  * Generic metadata functions

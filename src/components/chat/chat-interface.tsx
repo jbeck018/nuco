@@ -6,6 +6,8 @@
  * Now enhanced with context-aware prompting based on user preferences.
  */
 
+"use client";
+
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +16,7 @@ import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { Button } from '@/components/ui/button';
 import { PlusIcon } from 'lucide-react';
-import { useTRPC } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/trpc';
 import { generateCompletion } from '@/lib/ai/service';
 import { useAiPreferences } from '@/hooks/useAiPreferences';
 import { applyContextAwarePrompting } from '@/lib/ai/context-aware';
@@ -22,8 +24,7 @@ import { streamToString } from '@/lib/utils';
 import { 
   getDefaultModel, 
   getMaxTokens, 
-  getContextSettings,
-  applyContextSettings
+  getContextSettings,  
 } from '@/lib/utils/ai-utils';
 
 import { useMutation } from "@tanstack/react-query";
@@ -74,7 +75,9 @@ export function ChatInterface({
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, streamingMessage]);
 
   const handleSendMessage = async (content: string) => {
@@ -195,9 +198,9 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b p-4">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background p-4">
         <h2 className="text-xl font-semibold">Chat</h2>
         <Button
           variant="outline"
@@ -211,7 +214,7 @@ export function ChatInterface({
       </div>
       
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" id="chat-messages-container">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
             <div>
@@ -220,7 +223,7 @@ export function ChatInterface({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex w-full flex-col">
             {messages.map((message) => (
               <ChatMessage
                 key={message.id}
@@ -246,17 +249,19 @@ export function ChatInterface({
               />
             )}
             
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="h-4" />
           </div>
         )}
       </div>
       
       {/* Input */}
-      <ChatInput
-        onSend={handleSendMessage}
-        isDisabled={isProcessing}
-        placeholder="Type a message..."
-      />
+      <div className="sticky bottom-0 z-10 border-t bg-background p-4">
+        <ChatInput
+          onSend={handleSendMessage}
+          isDisabled={isProcessing}
+          placeholder="Type a message..."
+        />
+      </div>
     </div>
   );
 } 

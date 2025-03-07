@@ -8,7 +8,7 @@
 'use client';;
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { signIn } from 'next-auth/react';
 import { useTRPC } from '@/lib/trpc/trpc';
 import { useOrganization } from '@/lib/organizations/context';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,10 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { IntegrationType } from '@/lib/integrations';
 import type { TRPCClientErrorLike } from '@trpc/client';
 import type { AppRouter } from '@/lib/trpc/router';
+import { User } from 'lucide-react';
+// Import company icons from react-icons
+import { FaGoogle, FaSalesforce, FaSlack } from 'react-icons/fa';
+import { SiHubspot } from 'react-icons/si';
 
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
@@ -52,6 +56,11 @@ interface Integration {
   config: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  owner: {
+    id: string;
+    name: string;
+    isCurrentUser: boolean;
+  };
 }
 
 // Define the available integration interface
@@ -85,10 +94,16 @@ export function IntegrationsList() {
   const { data: availableIntegrations, isLoading: isLoadingAvailableIntegrations } = 
     useQuery(trpc.integration.getAvailableTypes.queryOptions());
 
+  // Fetch authentication status for each integration type
+  const { data: authStatus, isLoading: isLoadingAuthStatus } = 
+    useQuery(trpc.integration.getAuthStatus.queryOptions());
+
   // Display organization context info if applicable
   useEffect(() => {
     if (currentOrganization) {
       console.log(`Loading integrations for organization: ${currentOrganization.name}`);
+    } else {
+      console.log('Loading personal integrations (no organization selected)');
     }
   }, [currentOrganization]);
 
@@ -137,6 +152,7 @@ export function IntegrationsList() {
         description: 'The integration has been disconnected successfully.',
       });
       refetchUserIntegrations();
+      queryClient.invalidateQueries(trpc.integration.getAuthStatus.pathFilter());
       router.refresh();
     },
     
@@ -202,6 +218,7 @@ export function IntegrationsList() {
         description: 'The integration has been deleted successfully.',
       });
       refetchUserIntegrations();
+      queryClient.invalidateQueries(trpc.integration.getAuthStatus.pathFilter());
       router.refresh();
     },
     
@@ -233,104 +250,49 @@ export function IntegrationsList() {
     },
   }));
 
-  // Mutation for syncing an integration
-  const syncIntegration = useMutation(trpc.integration.sync.mutationOptions({
-    // Optimistically update the cache
-    onMutate: async ({ id }) => {
-      // Cancel outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries(trpc.integration.getAll.pathFilter());
-      
-      // Get current data from cache
-      const previousData = queryClient.getQueryData(trpc.integration.getAll.queryKey(
-        currentOrganization ? { organizationId: currentOrganization.id } : undefined
-      ));
-      
-      // Optimistically update the cache with syncing status
-      queryClient.setQueryData(trpc.integration.getAll.queryKey(
-        currentOrganization ? { organizationId: currentOrganization.id } : undefined
-      ), (old) => {
-        if (!old) return old;
-        
-        return old.map(integration => {
-          if (integration.id === id) {
-            return {
-              ...integration,
-              status: 'syncing', // Show as syncing while the operation is in progress
-            };
-          }
-          return integration;
-        });
-      });
-      
-      // Return previous data for rollback in case of failure
-      return { previousData };
-    },
-    
-    onSuccess: () => {
-      toast({
-        title: 'Integration synced',
-        description: 'The integration has been synced successfully.',
-      });
-      refetchUserIntegrations();
-      router.refresh();
-    },
-    
-    // If mutation fails, roll back to the previous value
-    onError: (error: TRPCClientErrorLike<AppRouter>, variables, context) => {
-      // Restore the previous data
-      if (context?.previousData) {
-        queryClient.setQueryData(trpc.integration.getAll.queryKey(
-          currentOrganization ? { organizationId: currentOrganization.id } : undefined
-        ), context.previousData);
-      }
-      
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to sync integration',
-        variant: 'destructive',
-      });
-    },
-    
-    // After success or error, invalidate the query to ensure data consistency
-    onSettled: () => {
-      queryClient.invalidateQueries(trpc.integration.getAll.pathFilter());
-    },
-  }));
-
   // Handle connect button click
   const handleConnect = (type: IntegrationType) => {
-    let authUrl = '';
-    
-    switch (type) {
-      case 'salesforce':
-        authUrl = `/api/integrations/salesforce/authorize`;
-        break;
-      case 'hubspot':
-        authUrl = `/api/integrations/hubspot/authorize`;
-        break;
-      case 'google':
-        authUrl = `/api/integrations/google/authorize`;
-        break;
-      case 'slack':
-        authUrl = `/api/integrations/slack/authorize`;
-        break;
-      default:
-        toast({
-          title: 'Error',
-          description: `Unknown integration type: ${type}`,
-          variant: 'destructive',
-        });
-        return;
-    }
-    
-    // Redirect to the authorization URL
-    window.location.href = authUrl;
+    // Use NextAuth's signIn function for OAuth flow
+    signIn(type, { 
+      callbackUrl: `/dashboard/integrations?type=${type}`,
+      redirect: true
+    });
   };
 
   // Handle disconnect button click
   const handleDisconnect = () => {
     if (selectedIntegration) {
-      disconnectIntegration.mutate({ id: selectedIntegration });
+      const integration = userIntegrations?.find(i => i.id === selectedIntegration);
+      
+      if (integration) {
+        // For OAuth-based integrations, we should revoke the token through NextAuth
+        // This is a hybrid approach that works with both NextAuth and custom integrations
+        if (integration.type === 'google' || integration.type === 'salesforce' || 
+            integration.type === 'hubspot' || integration.type === 'slack') {
+          
+          // First, disconnect using tRPC mutation for database updates
+          disconnectIntegration.mutate({ id: selectedIntegration }, {
+            onSuccess: () => {
+              // Close dialog
+              setIsDisconnectDialogOpen(false);
+              
+              // Show success message
+              toast({
+                title: 'Integration disconnected',
+                description: 'The integration has been disconnected successfully.',
+              });
+              
+              // Refresh data
+              refetchUserIntegrations();
+              queryClient.invalidateQueries(trpc.integration.getAuthStatus.pathFilter());
+              router.refresh();
+            }
+          });
+        } else {
+          // For non-OAuth integrations, just use the existing mutation
+          disconnectIntegration.mutate({ id: selectedIntegration });
+        }
+      }
     }
   };
 
@@ -341,33 +303,79 @@ export function IntegrationsList() {
     }
   };
 
-  // Handle sync button click
-  const handleSync = (id: string) => {
-    syncIntegration.mutate({ id });
-  };
-
-  // Get connected integration by type
+  // Get a connected integration by type
   const getConnectedIntegration = (type: IntegrationType): Integration | undefined => {
     return userIntegrations?.find((integration): integration is Integration => 
       integration.type === type && integration.status === 'connected'
     );
   };
 
+  // Check if a user is authenticated with a provider
+  const isAuthenticatedWithProvider = (type: IntegrationType): boolean => {
+    if (!authStatus) return false;
+    return authStatus[type]?.isAuthenticated || false;
+  };
+
+  // Generate documentation URL for an integration type
+  const getDocumentationUrl = (type: IntegrationType): string => {
+    switch (type) {
+      case 'salesforce':
+        return 'https://developer.salesforce.com/docs';
+      case 'hubspot':
+        return 'https://developers.hubspot.com/docs';
+      case 'google':
+        return 'https://developers.google.com/workspace';
+      case 'slack':
+        return 'https://api.slack.com/docs';
+      default:
+        return '#';
+    }
+  };
+
+  // Helper function to get the appropriate icon for an integration type
+  const getIntegrationIcon = (type: IntegrationType) => {
+    switch (type) {
+      case 'salesforce':
+        return <FaSalesforce className="h-5 w-5 text-blue-600" />;
+      case 'hubspot':
+        return <SiHubspot className="h-5 w-5 text-orange-500" />;
+      case 'google':
+        return <FaGoogle className="h-5 w-5 text-red-500" />;
+      case 'slack':
+        return <FaSlack className="h-5 w-5 text-purple-500" />;
+      default:
+        return <FaGoogle className="h-5 w-5" />;
+    }
+  };
+
   // Loading state
-  if (isLoadingUserIntegrations || isLoadingAvailableIntegrations) {
+  if (isLoadingUserIntegrations || isLoadingAvailableIntegrations || isLoadingAuthStatus) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {[1, 2, 3].map((i: number) => (
           <Card key={i} className="overflow-hidden">
             <CardHeader className="pb-2">
-              <Skeleton className="h-6 w-24" />
-              <Skeleton className="h-4 w-full" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-5 rounded-full" />
+                  <Skeleton className="h-6 w-32" />
+                </div>
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-full mt-2" />
             </CardHeader>
             <CardContent>
-              <Skeleton className="h-20 w-full" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-1">
+                  <Skeleton className="h-3 w-3 rounded-full" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <Skeleton className="h-4 w-40" />
+              </div>
             </CardContent>
-            <CardFooter>
-              <Skeleton className="h-10 w-full" />
+            <CardFooter className="flex justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-9 w-28" />
             </CardFooter>
           </Card>
         ))}
@@ -375,16 +383,21 @@ export function IntegrationsList() {
     );
   }
 
+  // Count connected integrations
+  const connectedCount = userIntegrations?.length || 0;
+
+  const availableConnections = availableIntegrations?.filter(i => !userIntegrations?.some(ui => ui.type === i.type))
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="connected" value={activeTab} onValueChange={(value) => setActiveTab(value as 'available' | 'connected')}>
         <TabsList className="mb-4">
-          <TabsTrigger value="connected">Connected</TabsTrigger>
+          <TabsTrigger value="connected">Connected ({connectedCount})</TabsTrigger>
           <TabsTrigger value="available">Available</TabsTrigger>
         </TabsList>
 
         <TabsContent value="connected" className="space-y-4">
-          {userIntegrations?.length === 0 ? (
+          {connectedCount === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">
                 You don&apos;t have any connected integrations yet.
@@ -398,112 +411,126 @@ export function IntegrationsList() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {userIntegrations?.map((integration) => (
-                <Card key={integration.id} className="overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl">{integration.name}</CardTitle>
-                      <Badge variant={integration.status === 'connected' ? 'default' : 'outline'}>
-                        {integration.status}
-                      </Badge>
-                    </div>
-                    <CardDescription>
-                      {availableIntegrations?.find((i: AvailableIntegration) => i.type === integration.type)?.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <span>Last synced:</span>
-                      <span>{integration.lastSynced ? new Date(integration.lastSynced).toLocaleString() : 'Never'}</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedIntegration(integration.id);
-                        setIsDisconnectDialogOpen(true);
-                      }}
-                      disabled={integration.status !== 'connected'}
-                    >
-                      Disconnect
-                    </Button>
-                    <div className="space-x-2">
+            <div className="grid grid-cols-1 gap-6">
+              {userIntegrations?.map((integration) => {
+                const connectedIntegration = getConnectedIntegration(integration.type);
+                
+                return (
+                  <Card key={integration.type} className="overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <div className="flex-shrink-0">
+                            {getIntegrationIcon(integration.type)}
+                          </div>
+                          <span className="truncate">{integration.name}</span>
+                        </CardTitle>
+                        <Badge variant="default">Connected</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-sm space-y-2">
+                        <div className="text-muted-foreground">
+                          {connectedIntegration ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                <span>
+                                  {connectedIntegration.owner?.isCurrentUser 
+                                    ? 'Connected by you' 
+                                    : `Connected by ${connectedIntegration.owner?.name || 'Unknown'}`}
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                Last synced: {connectedIntegration.lastSynced 
+                                  ? new Date(connectedIntegration.lastSynced).toLocaleString() 
+                                  : 'Never'}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              <span>Connected via OAuth</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between">
+                      <a
+                        href={getDocumentationUrl(integration.type)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        Documentation
+                      </a>
                       <Button
                         variant="outline"
-                        size="sm"
                         onClick={() => {
-                          setSelectedIntegration(integration.id);
-                          setIsDeleteDialogOpen(true);
+                          if (connectedIntegration) {
+                            setSelectedIntegration(connectedIntegration.id);
+                            setIsDisconnectDialogOpen(true);
+                          } else {
+                            // For OAuth integrations, we need to revoke access
+                            // This would typically be handled by the auth provider
+                            toast({
+                              title: 'NextAuth Integration',
+                              description: 'To disconnect this NextAuth integration, please visit your account settings.',
+                            });
+                          }
                         }}
                       >
-                        Delete
+                        Disconnect
                       </Button>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleSync(integration.id)}
-                        disabled={integration.status !== 'connected' || syncIntegration.isPending}
-                      >
-                        {syncIntegration.isPending && syncIntegration.variables?.id === integration.id ? (
-                          <LoadingSpinner className="mr-2 h-4 w-4" />
-                        ) : null}
-                        Sync
-                      </Button>
-                    </div>
-                  </CardFooter>
-                </Card>
-              ))}
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="available" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {availableIntegrations?.map((integration: AvailableIntegration) => {
+          <div className="grid grid-cols-1 gap-6">
+            {(availableConnections || []).map((integration: AvailableIntegration) => {
+              const isConnected = isAuthenticatedWithProvider(integration.type);
               const connectedIntegration = getConnectedIntegration(integration.type);
-              const isIntegrationConnected = !!connectedIntegration;
 
               return (
                 <Card key={integration.type} className="overflow-hidden">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl flex items-center">
-                        <div className="w-6 h-6 mr-2 relative">
-                          <Image
-                            src={integration.icon}
-                            alt={integration.name}
-                            width={24}
-                            height={24}
-                            className="object-contain"
-                          />
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <div className="flex-shrink-0">
+                          {getIntegrationIcon(integration.type)}
                         </div>
-                        {integration.name}
+                        <span className="truncate">{integration.name}</span>
                       </CardTitle>
-                      {isIntegrationConnected && (
-                        <Badge variant="default">Connected</Badge>
-                      )}
+                      {isConnected && <Badge variant="default">Connected</Badge>}
                     </div>
-                    <CardDescription>{integration.description}</CardDescription>
+                    <CardDescription className="line-clamp-2">{integration.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-sm">
-                      {isIntegrationConnected ? (
+                    <div className="text-sm space-y-2">
+                      {isConnected ? (
                         <div className="text-muted-foreground">
-                          Connected as: {connectedIntegration?.name}
+                          {connectedIntegration ? (
+                            <>Connected as: {connectedIntegration.name}</>
+                          ) : (
+                            <>Connected via NextAuth</>
+                          )}
                         </div>
                       ) : (
                         <div className="text-muted-foreground">
-                          Connect to {integration.name} to access your data.
+                          Connect to {integration.name} using NextAuth to access your data.
                         </div>
                       )}
                     </div>
                   </CardContent>
                   <CardFooter className="flex justify-between">
                     <a
-                      href={integration.documentationUrl}
+                      href={getDocumentationUrl(integration.type)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-blue-600 hover:underline"
@@ -511,17 +538,26 @@ export function IntegrationsList() {
                       Documentation
                     </a>
                     <Button
-                      variant={isIntegrationConnected ? 'outline' : 'default'}
+                      variant={isConnected ? 'outline' : 'default'}
                       onClick={() => {
-                        if (isIntegrationConnected) {
-                          setSelectedIntegration(connectedIntegration?.id);
-                          setIsDisconnectDialogOpen(true);
+                        if (isConnected) {
+                          if (connectedIntegration) {
+                            setSelectedIntegration(connectedIntegration.id);
+                            setIsDisconnectDialogOpen(true);
+                          } else {
+                            // For OAuth integrations, we need to revoke access
+                            // This would typically be handled by the auth provider
+                            toast({
+                              title: 'NextAuth Integration',
+                              description: 'To disconnect this NextAuth integration, please visit your account settings.',
+                            });
+                          }
                         } else {
                           handleConnect(integration.type);
                         }
                       }}
                     >
-                      {isIntegrationConnected ? 'Disconnect' : 'Connect'}
+                      {isConnected ? 'Disconnect' : 'Connect'}
                     </Button>
                   </CardFooter>
                 </Card>

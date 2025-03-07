@@ -12,8 +12,11 @@ export default function OrganizationLayout({
   children,
   params,
 }: OrganizationLayoutProps) {
+  // Convert params.slug to a string to avoid the async params error
+  const slugString = String(params.slug);
+  
   return (
-    <OrganizationProvider initialOrganizationSlug={params.slug}>
+    <OrganizationProvider initialOrganizationSlug={slugString}>
       {children}
     </OrganizationProvider>
   );

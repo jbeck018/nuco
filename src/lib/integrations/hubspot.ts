@@ -5,8 +5,8 @@
  * It provides methods for authenticating with HubSpot, revoking tokens, and fetching user information.
  * It also includes methods for working with HubSpot's CRM objects like contacts, companies, and deals.
  */
-
-import { OAuth2Integration } from './oauth2-base';
+import { auth, signIn, signOut } from '@/lib/auth';
+import { Integration, ExtendedSession, AuthenticationError, isAuthenticatedWithProvider } from './oauth2-base';
 
 /**
  * Interface for HubSpot user information
@@ -81,239 +81,212 @@ export interface HubSpotDeal {
 }
 
 /**
- * HubSpot Integration class
+ * HubSpot integration using NextAuth
+ * This class implements HubSpot API interactions using NextAuth for authentication
  */
-export class HubSpotIntegration extends OAuth2Integration {
-  private revokeTokenUrl: string;
-  private userInfoUrl: string;
-  private apiBaseUrl: string;
-
+export class HubSpotIntegration implements Integration {
+  private apiVersion = 'v3';
+  
   /**
    * Constructor for HubSpotIntegration
-   * @param config Optional configuration object
    */
-  constructor(config?: {
-    clientId?: string;
-    clientSecret?: string;
-    redirectUri?: string;
-    scopes?: string[];
-  }) {
-    // Default configuration for HubSpot OAuth2
-    super({
-      clientId: config?.clientId || process.env.HUBSPOT_CLIENT_ID || '',
-      clientSecret: config?.clientSecret || process.env.HUBSPOT_CLIENT_SECRET || '',
-      redirectUri: config?.redirectUri || `${process.env.NEXTAUTH_URL}/api/integrations/hubspot/callback`,
-      scopes: config?.scopes || [
-        'oauth',
-      ],
-      authorizationUrl: 'https://app.hubspot.com/oauth/authorize',
-      tokenUrl: 'https://api.hubapi.com/oauth/v1/token',
-    });
-
-    // HubSpot-specific endpoints
-    this.revokeTokenUrl = 'https://api.hubapi.com/oauth/v1/refresh-tokens/revoke';
-    this.userInfoUrl = 'https://api.hubapi.com/oauth/v1/access-tokens/';
-    this.apiBaseUrl = 'https://api.hubapi.com';
+  constructor() {
+    // No configuration needed as we use NextAuth
   }
-
+  
   /**
-   * Revoke a HubSpot refresh token
-   * @param token The refresh token to revoke
-   * @returns A boolean indicating success
+   * Get the authentication status for HubSpot
+   * @returns Authentication status
    */
-  async revokeToken(token: string): Promise<boolean> {
+  async getAuthStatus(): Promise<{ isAuthenticated: boolean; accountId?: string }> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!session?.user) {
+      return { isAuthenticated: false };
+    }
+    
+    // Check if the user is authenticated with HubSpot
+    if (isAuthenticatedWithProvider(session, 'hubspot')) {
+      return { 
+        isAuthenticated: true,
+        accountId: session.user.id
+      };
+    }
+    
+    return { isAuthenticated: false };
+  }
+  
+  /**
+   * Disconnect from HubSpot
+   * @returns True if disconnected successfully
+   */
+  async disconnect(): Promise<boolean> {
     try {
-      const response = await fetch(this.revokeTokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          token,
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-        }).toString(),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Error revoking HubSpot token:', error);
-        return false;
-      }
-
+      await signOut({ redirect: false });
       return true;
     } catch (error) {
-      console.error('Error revoking HubSpot token:', error);
+      console.error('Failed to disconnect from HubSpot:', error);
       return false;
     }
   }
-
+  
+  /**
+   * Authenticate with HubSpot
+   * @returns True if authentication was initiated
+   */
+  async authenticate(): Promise<boolean> {
+    try {
+      await signIn('hubspot', { redirect: true });
+      return true;
+    } catch (error) {
+      console.error('Failed to authenticate with HubSpot:', error);
+      return false;
+    }
+  }
+  
   /**
    * Get user information from HubSpot
-   * @param accessToken The access token
-   * @returns User information
+   * @returns User information from HubSpot
    */
-  async getUserInfo(accessToken: string): Promise<HubSpotUserInfo> {
-    try {
-      const response = await fetch(`${this.userInfoUrl}${accessToken}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to get HubSpot user info: ${JSON.stringify(error)}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting HubSpot user info:', error);
-      throw error;
+  async getUserInfo(): Promise<HubSpotUserInfo | null> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'hubspot')) {
+      throw new AuthenticationError('Not authenticated with HubSpot');
     }
+    
+    const accessToken = session.token!.accessToken!;
+    
+    // Get user info from HubSpot API
+    const response = await fetch('https://api.hubapi.com/integrations/v1/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get user info: ${response.statusText}`);
+    }
+    
+    return await response.json();
   }
-
+  
   /**
    * Get contacts from HubSpot
-   * @param accessToken The access token
-   * @param limit The number of contacts to return (default: 10)
-   * @param after The pagination cursor
-   * @returns A list of contacts
+   * @param limit - Maximum number of contacts to return
+   * @returns List of contacts
    */
-  async getContacts(accessToken: string, limit: number = 10, after?: string): Promise<{ contacts: HubSpotContact[], after?: string }> {
-    try {
-      let url = `${this.apiBaseUrl}/crm/v3/objects/contacts?limit=${limit}`;
-      if (after) {
-        url += `&after=${after}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to get HubSpot contacts: ${JSON.stringify(error)}`);
-      }
-
-      const data = await response.json();
-      return {
-        contacts: data.results,
-        after: data.paging?.next?.after,
-      };
-    } catch (error) {
-      console.error('Error getting HubSpot contacts:', error);
-      throw error;
+  async getContacts(limit = 10): Promise<HubSpotContactsResponse> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'hubspot')) {
+      throw new AuthenticationError('Not authenticated with HubSpot');
     }
-  }
-
-  /**
-   * Get companies from HubSpot
-   * @param accessToken The access token
-   * @param limit The number of companies to return (default: 10)
-   * @param after The pagination cursor
-   * @returns A list of companies
-   */
-  async getCompanies(accessToken: string, limit: number = 10, after?: string): Promise<{ companies: HubSpotCompany[], after?: string }> {
-    try {
-      let url = `${this.apiBaseUrl}/crm/v3/objects/companies?limit=${limit}`;
-      if (after) {
-        url += `&after=${after}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to get HubSpot companies: ${JSON.stringify(error)}`);
-      }
-
-      const data = await response.json();
-      return {
-        companies: data.results,
-        after: data.paging?.next?.after,
-      };
-    } catch (error) {
-      console.error('Error getting HubSpot companies:', error);
-      throw error;
+    
+    const accessToken = session.token!.accessToken!;
+    
+    const url = `https://api.hubapi.com/crm/${this.apiVersion}/objects/contacts?limit=${limit}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get contacts: ${response.statusText}`);
     }
+    
+    return await response.json();
   }
-
-  /**
-   * Get deals from HubSpot
-   * @param accessToken The access token
-   * @param limit The number of deals to return (default: 10)
-   * @param after The pagination cursor
-   * @returns A list of deals
-   */
-  async getDeals(accessToken: string, limit: number = 10, after?: string): Promise<{ deals: HubSpotDeal[], after?: string }> {
-    try {
-      let url = `${this.apiBaseUrl}/crm/v3/objects/deals?limit=${limit}`;
-      if (after) {
-        url += `&after=${after}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to get HubSpot deals: ${JSON.stringify(error)}`);
-      }
-
-      const data = await response.json();
-      return {
-        deals: data.results,
-        after: data.paging?.next?.after,
-      };
-    } catch (error) {
-      console.error('Error getting HubSpot deals:', error);
-      throw error;
-    }
-  }
-
+  
   /**
    * Create a contact in HubSpot
-   * @param accessToken The access token
-   * @param properties The contact properties
+   * @param properties - Contact properties
    * @returns The created contact
    */
-  async createContact(accessToken: string, properties: Record<string, string>): Promise<HubSpotContact> {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/crm/v3/objects/contacts`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ properties }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to create HubSpot contact: ${JSON.stringify(error)}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error creating HubSpot contact:', error);
-      throw error;
+  async createContact(properties: Record<string, string>): Promise<HubSpotContact> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'hubspot')) {
+      throw new AuthenticationError('Not authenticated with HubSpot');
     }
+    
+    const accessToken = session.token!.accessToken!;
+    
+    const url = `https://api.hubapi.com/crm/${this.apiVersion}/objects/contacts`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ properties }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create contact: ${response.statusText}`);
+    }
+    
+    return await response.json();
   }
+  
+  /**
+   * Get deals from HubSpot
+   * @param limit - Maximum number of deals to return
+   * @returns List of deals
+   */
+  async getDeals(limit = 10): Promise<HubSpotDealsResponse> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!isAuthenticatedWithProvider(session, 'hubspot')) {
+      throw new AuthenticationError('Not authenticated with HubSpot');
+    }
+    
+    const accessToken = session.token!.accessToken!;
+    
+    const url = `https://api.hubapi.com/crm/${this.apiVersion}/objects/deals?limit=${limit}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get deals: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  }
+}
+
+/**
+ * HubSpot contacts response
+ */
+export interface HubSpotContactsResponse {
+  results: HubSpotContact[];
+  paging?: {
+    next?: {
+      after: string;
+      link: string;
+    };
+  };
+}
+
+/**
+ * HubSpot deals response
+ */
+export interface HubSpotDealsResponse {
+  results: HubSpotDeal[];
+  paging?: {
+    next?: {
+      after: string;
+      link: string;
+    };
+  };
 } 

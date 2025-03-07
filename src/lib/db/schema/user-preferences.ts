@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { NotificationPreferences, DashboardLayout, UserCustomization } from '../types/metadata-types';
-import { createSelectSchema } from 'drizzle-zod';
+import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 
 /**
  * User preferences table
@@ -28,6 +28,7 @@ export const userPreferences = pgTable('user_preferences', {
 }));
 
 export const selectUserPreferencesSchema = createSelectSchema(userPreferences);
+export const insertUserPreferencesSchema = createInsertSchema(userPreferences);
 
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type NewUserPreferences = typeof userPreferences.$inferInsert;

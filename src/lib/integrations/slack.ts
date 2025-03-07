@@ -2,11 +2,12 @@
  * Slack Integration
  * 
  * This file contains the implementation of the Slack integration.
- * It handles OAuth2 authentication, API calls, and webhook handling.
+ * It handles API calls and webhook handling using NextAuth for authentication.
  */
 
 import { z } from 'zod';
-import { OAuth2Integration, OAuth2IntegrationConfig, OAuth2Tokens } from './oauth2-base';
+import { auth, signIn, signOut } from '@/lib/auth';
+import { Integration, ExtendedSession, AuthenticationError, isAuthenticatedWithProvider } from './oauth2-base';
 import crypto from 'crypto';
 
 /**
@@ -33,9 +34,6 @@ export const slackConfigSchema = z.object({
   clientId: z.string(),
   clientSecret: z.string(),
   signingSecret: z.string().optional(),
-  accessToken: z.string().optional(),
-  refreshToken: z.string().optional(),
-  expiresAt: z.number().optional(),
   teamId: z.string().optional(),
   teamName: z.string().optional(),
   botUserId: z.string().optional(),
@@ -51,8 +49,39 @@ export type SlackConfig = z.infer<typeof slackConfigSchema>;
 export const slackChannelSchema = z.object({
   id: z.string(),
   name: z.string(),
+  is_channel: z.boolean(),
+  is_group: z.boolean(),
+  is_im: z.boolean(),
   is_private: z.boolean(),
-  is_archived: z.boolean().optional(),
+  is_mpim: z.boolean(),
+  created: z.number(),
+  is_archived: z.boolean(),
+  is_general: z.boolean(),
+  unlinked: z.number(),
+  name_normalized: z.string(),
+  is_shared: z.boolean(),
+  is_org_shared: z.boolean(),
+  is_pending_ext_shared: z.boolean(),
+  pending_shared: z.array(z.unknown()),
+  context_team_id: z.string(),
+  updated: z.number().optional(),
+  parent_conversation: z.string().optional(),
+  creator: z.string().optional(),
+  is_ext_shared: z.boolean().optional(),
+  shared_team_ids: z.array(z.string()).optional(),
+  pending_connected_team_ids: z.array(z.string()).optional(),
+  is_member: z.boolean().optional(),
+  topic: z.object({
+    value: z.string(),
+    creator: z.string(),
+    last_set: z.number(),
+  }).optional(),
+  purpose: z.object({
+    value: z.string(),
+    creator: z.string(),
+    last_set: z.number(),
+  }).optional(),
+  previous_names: z.array(z.string()).optional(),
   num_members: z.number().optional(),
 });
 
@@ -63,15 +92,45 @@ export type SlackChannel = z.infer<typeof slackChannelSchema>;
  */
 export const slackUserSchema = z.object({
   id: z.string(),
+  team_id: z.string(),
   name: z.string(),
-  real_name: z.string().optional(),
+  deleted: z.boolean(),
+  color: z.string(),
+  real_name: z.string(),
+  tz: z.string(),
+  tz_label: z.string(),
+  tz_offset: z.number(),
   profile: z.object({
-    display_name: z.string().optional(),
+    title: z.string().optional(),
+    phone: z.string().optional(),
+    skype: z.string().optional(),
+    real_name: z.string(),
+    real_name_normalized: z.string(),
+    display_name: z.string(),
+    display_name_normalized: z.string(),
+    status_text: z.string(),
+    status_emoji: z.string(),
+    status_expiration: z.number().optional(),
+    avatar_hash: z.string(),
     email: z.string().optional(),
-    image_72: z.string().optional(),
-  }).optional(),
-  is_bot: z.boolean().optional(),
-  is_admin: z.boolean().optional(),
+    image_original: z.string().optional(),
+    image_24: z.string(),
+    image_32: z.string(),
+    image_48: z.string(),
+    image_72: z.string(),
+    image_192: z.string(),
+    image_512: z.string(),
+    team: z.string(),
+  }),
+  is_admin: z.boolean(),
+  is_owner: z.boolean(),
+  is_primary_owner: z.boolean(),
+  is_restricted: z.boolean(),
+  is_ultra_restricted: z.boolean(),
+  is_bot: z.boolean(),
+  is_app_user: z.boolean(),
+  updated: z.number(),
+  has_2fa: z.boolean().optional(),
 });
 
 export type SlackUser = z.infer<typeof slackUserSchema>;
@@ -81,16 +140,16 @@ export type SlackUser = z.infer<typeof slackUserSchema>;
  */
 export const slackMessageSchema = z.object({
   channel: z.string(),
-  text: z.string().optional(),
-  blocks: z.array(z.any()).optional(),
+  text: z.string(),
+  blocks: z.array(z.record(z.unknown())).optional(),
   thread_ts: z.string().optional(),
-  mrkdwn: z.boolean().optional(),
+  reply_broadcast: z.boolean().optional(),
 });
 
 export type SlackMessage = z.infer<typeof slackMessageSchema>;
 
 /**
- * Slack API response type
+ * Slack API response interface
  */
 interface SlackApiResponse {
   ok: boolean;
@@ -99,14 +158,14 @@ interface SlackApiResponse {
 }
 
 /**
- * Slack channel response
+ * Slack channel response interface
  */
 interface SlackChannelResponse extends SlackApiResponse {
   channels: Record<string, unknown>[];
 }
 
 /**
- * Slack user response
+ * Slack user response interface
  */
 interface SlackUserResponse extends SlackApiResponse {
   members: Record<string, unknown>[];
@@ -115,134 +174,116 @@ interface SlackUserResponse extends SlackApiResponse {
 /**
  * Slack integration class
  */
-export class SlackIntegration extends OAuth2Integration {
+export class SlackIntegration implements Integration {
   private config: SlackConfig;
-
-  constructor(config: SlackConfig) {
-    const oauthConfig: OAuth2IntegrationConfig = {
-      authorizationUrl: 'https://slack.com/oauth/v2/authorize',
-      tokenUrl: 'https://slack.com/api/oauth.v2.access',
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      redirectUri: '',
-      scopes: config.scopes,
-    };
-
-    super(oauthConfig);
-    this.config = config;
-  }
-
+  
   /**
-   * Get the integration ID (used for analytics)
-   * This is a placeholder - in a real implementation, this would be set when the integration is created
+   * Constructor for SlackIntegration
+   * @param config - Configuration for the Slack integration
+   */
+  constructor(config: SlackConfig) {
+    this.config = slackConfigSchema.parse(config);
+  }
+  
+  /**
+   * Get the integration ID
+   * @returns The integration ID
    */
   getIntegrationId(): string {
-    // In a real implementation, this would be the ID from the database
-    // For now, we'll use the team ID as a fallback
-    return this.config.teamId || 'unknown';
+    return 'slack';
   }
-
+  
   /**
    * Get the team ID
+   * @returns The team ID
    */
   getTeamId(): string {
-    return this.config.teamId || 'unknown';
+    return this.config.teamId || '';
   }
-
+  
   /**
    * Get the bot user ID
+   * @returns The bot user ID
    */
   getBotUserId(): string {
-    return this.config.botUserId || 'unknown';
+    return this.config.botUserId || '';
   }
-
+  
   /**
-   * Get the authorization URL for OAuth2 flow with custom redirect URI
+   * Get the authentication status for Slack
+   * @returns Authentication status
    */
-  getSlackAuthorizationUrl(redirectUri: string, state: string): string {
-    this.redirectUri = redirectUri;
-    const url = new URL(this.authorizationUrl);
-    url.searchParams.append('client_id', this.clientId);
-    url.searchParams.append('scope', this.scopes.join(' '));
-    url.searchParams.append('redirect_uri', redirectUri);
-    url.searchParams.append('state', state);
-    url.searchParams.append('user_scope', '');
+  async getAuthStatus(): Promise<{ isAuthenticated: boolean; accountId?: string }> {
+    const session = await auth() as ExtendedSession;
     
-    return url.toString();
-  }
-
-  /**
-   * Override the base getAuthorizationUrl to satisfy the interface
-   */
-  getAuthorizationUrl(state: string): string {
-    // For Slack, we need a redirect URI, so we'll use a default one if available
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/slack/callback`;
-      return this.getSlackAuthorizationUrl(redirectUri, state);
+    if (!session?.user) {
+      return { isAuthenticated: false };
     }
     
-    // If no default redirect URI is available, throw an error
-    throw new Error('Use getSlackAuthorizationUrl with redirectUri for Slack');
-  }
-
-  /**
-   * Handle the OAuth2 callback and exchange code for tokens
-   */
-  async handleCallback(code: string, redirectUri: string): Promise<SlackConfig> {
-    this.redirectUri = redirectUri;
-    
-    const tokenResponse = await fetch(this.tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to exchange code for token: ${await tokenResponse.text()}`);
+    // Check if the user is authenticated with Slack
+    if (isAuthenticatedWithProvider(session, 'slack')) {
+      return { 
+        isAuthenticated: true,
+        accountId: session.user.id
+      };
     }
-
-    const data = await tokenResponse.json();
-
-    // Update the config with the new tokens
-    this.config = {
-      ...this.config,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
-      teamId: data.team?.id,
-      teamName: data.team?.name,
-      botUserId: data.bot_user_id,
-      webhookUrl: data.incoming_webhook?.url,
-    };
-
-    return this.config;
+    
+    return { isAuthenticated: false };
   }
-
+  
   /**
-   * Make an authenticated request to the Slack API
+   * Disconnect from Slack
+   * @returns True if disconnected successfully
+   */
+  async disconnect(): Promise<boolean> {
+    try {
+      await signOut({ redirect: false });
+      return true;
+    } catch (error) {
+      console.error('Failed to disconnect from Slack:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Authenticate with Slack
+   * @returns True if authentication was initiated
+   */
+  async authenticate(): Promise<boolean> {
+    try {
+      await signIn('slack', { redirect: true });
+      return true;
+    } catch (error) {
+      console.error('Failed to authenticate with Slack:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Make a request to the Slack API
+   * @param endpoint - The API endpoint
+   * @param method - The HTTP method
+   * @param data - The request data
+   * @returns The API response
    */
   async makeRequest<T>(endpoint: string, method = 'GET', data?: Record<string, unknown>): Promise<T> {
-    const tokens = await this.getAccessToken();
+    const session = await auth() as ExtendedSession;
     
+    if (!isAuthenticatedWithProvider(session, 'slack')) {
+      throw new AuthenticationError('Not authenticated with Slack');
+    }
+    
+    const accessToken = session.token!.accessToken!;
     let url = `${SLACK_API_URL}/${endpoint}`;
-    const headers: HeadersInit = {
-      'Authorization': `Bearer ${tokens.access_token}`,
-      'Content-Type': 'application/json; charset=utf-8',
-    };
-
+    
     const options: RequestInit = {
       method,
-      headers,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
     };
-
+    
     if (data) {
       if (method === 'GET') {
         const params = new URLSearchParams();
@@ -251,32 +292,32 @@ export class SlackIntegration extends OAuth2Integration {
         });
         const queryString = params.toString();
         if (queryString) {
-          url = url.includes('?') 
-            ? url + '&' + queryString 
-            : url + '?' + queryString;
+          const separator = url.includes('?') ? '&' : '?';
+          url = url + separator + queryString;
         }
       } else {
         options.body = JSON.stringify(data);
       }
     }
-
+    
     const response = await fetch(url, options);
     
     if (!response.ok) {
-      throw new Error(`Slack API error: ${await response.text()}`);
+      throw new Error(`Slack API error: ${response.statusText}`);
     }
-
-    const responseData = await response.json() as SlackApiResponse;
     
-    if (!responseData.ok) {
-      throw new Error(`Slack API error: ${responseData.error}`);
+    const result = await response.json();
+    
+    if (!result.ok) {
+      throw new Error(`Slack API error: ${result.error || 'Unknown error'}`);
     }
-
-    return responseData as unknown as T;
+    
+    return result as T;
   }
-
+  
   /**
-   * Get a list of channels
+   * Get channels from Slack
+   * @returns List of channels
    */
   async getChannels(): Promise<SlackChannel[]> {
     const response = await this.makeRequest<SlackChannelResponse>('conversations.list', 'GET', {
@@ -284,258 +325,144 @@ export class SlackIntegration extends OAuth2Integration {
       exclude_archived: true,
       limit: 1000,
     });
-
-    return response.channels.map(channel => ({
-      id: channel.id as string,
-      name: channel.name as string,
-      is_private: channel.is_private as boolean,
-      is_archived: channel.is_archived as boolean | undefined,
-      num_members: channel.num_members as number | undefined,
-    }));
+    
+    return response.channels.map(channel => slackChannelSchema.parse(channel));
   }
-
+  
   /**
-   * Get a list of users
+   * Get users from Slack
+   * @returns List of users
    */
   async getUsers(): Promise<SlackUser[]> {
     const response = await this.makeRequest<SlackUserResponse>('users.list', 'GET');
-
-    return response.members.map(user => ({
-      id: user.id as string,
-      name: user.name as string,
-      real_name: user.real_name as string | undefined,
-      profile: user.profile as SlackUser['profile'],
-      is_bot: user.is_bot as boolean | undefined,
-      is_admin: user.is_admin as boolean | undefined,
-    }));
+    
+    return response.members.map(member => slackUserSchema.parse(member));
   }
-
+  
   /**
-   * Send a message to a Slack channel
+   * Send a message to Slack
    * @param params - Message parameters
    * @returns The API response
    */
-  async sendMessage(params: {
-    channel: string;
-    text: string;
-    blocks?: Record<string, unknown>[];
-    thread_ts?: string;
-    reply_broadcast?: boolean;
-  }): Promise<Record<string, unknown>> {
-    return this.makeRequest('chat.postMessage', 'POST', params);
+  async sendMessage(params: SlackMessage): Promise<Record<string, unknown>> {
+    return await this.makeRequest('chat.postMessage', 'POST', params);
   }
-
+  
   /**
    * Add a reaction to a message
-   * @param channel - The channel ID containing the message
-   * @param timestamp - The timestamp of the message
-   * @param emoji - The emoji name (without colons)
+   * @param channel - The channel ID
+   * @param timestamp - The message timestamp
+   * @param emoji - The emoji name
    * @returns The API response
    */
   async addReaction(channel: string, timestamp: string, emoji: string): Promise<Record<string, unknown>> {
-    return this.makeRequest('reactions.add', 'POST', {
+    return await this.makeRequest('reactions.add', 'POST', {
       channel,
       timestamp,
       name: emoji,
     });
   }
-
+  
   /**
    * Remove a reaction from a message
-   * @param channel - The channel ID containing the message
-   * @param timestamp - The timestamp of the message
-   * @param emoji - The emoji name (without colons)
+   * @param channel - The channel ID
+   * @param timestamp - The message timestamp
+   * @param emoji - The emoji name
    * @returns The API response
    */
   async removeReaction(channel: string, timestamp: string, emoji: string): Promise<Record<string, unknown>> {
-    return this.makeRequest('reactions.remove', 'POST', {
+    return await this.makeRequest('reactions.remove', 'POST', {
       channel,
       timestamp,
       name: emoji,
     });
   }
-
+  
   /**
    * Get reactions for a message
-   * @param channel - The channel ID containing the message
-   * @param timestamp - The timestamp of the message
-   * @returns The API response with reactions
+   * @param channel - The channel ID
+   * @param timestamp - The message timestamp
+   * @returns The API response
    */
   async getReactions(channel: string, timestamp: string): Promise<Record<string, unknown>> {
-    return this.makeRequest('reactions.get', 'GET', {
+    return await this.makeRequest('reactions.get', 'GET', {
       channel,
       timestamp,
     });
   }
-
+  
   /**
-   * Get replies in a thread
-   * @param channel - The channel ID containing the thread
-   * @param thread_ts - The timestamp of the parent message
-   * @param limit - Maximum number of replies to return (default: 100)
-   * @returns The API response with thread replies
+   * Get thread replies
+   * @param channel - The channel ID
+   * @param thread_ts - The thread timestamp
+   * @param limit - The maximum number of replies to return
+   * @returns The API response
    */
-  async getThreadReplies(channel: string, thread_ts: string, limit: number = 100): Promise<Record<string, unknown>> {
-    return this.makeRequest('conversations.replies', 'GET', {
+  async getThreadReplies(channel: string, thread_ts: string, limit = 100): Promise<Record<string, unknown>> {
+    return await this.makeRequest('conversations.replies', 'GET', {
       channel,
       ts: thread_ts,
       limit,
     });
   }
-
+  
   /**
-   * Get a user's presence information
-   * @param userId - The ID of the user to get presence for
-   * @returns The API response with presence information
+   * Get a user's presence
+   * @param userId - The user ID
+   * @returns The API response
    */
   async getUserPresence(userId: string): Promise<Record<string, unknown>> {
-    return this.makeRequest('users.getPresence', 'GET', {
+    return await this.makeRequest('users.getPresence', 'GET', {
       user: userId,
     });
   }
-
+  
   /**
    * Set the user's presence
-   * @param presence - The presence state to set ('auto' or 'away')
+   * @param presence - The presence state
    * @returns The API response
    */
   async setUserPresence(presence: 'auto' | 'away'): Promise<Record<string, unknown>> {
-    return this.makeRequest('users.setPresence', 'POST', {
+    return await this.makeRequest('users.setPresence', 'POST', {
       presence,
     });
   }
-
-  /**
-   * Get the online status of all users in a workspace
-   * @returns The API response with all users' presence information
-   */
-  async getAllUsersPresence(): Promise<Record<string, unknown>> {
-    // Slack doesn't have a direct API for this, so we'll get all users and their presence
-    const users = await this.getUsers();
-    
-    // Get presence for each user
-    const presencePromises = users.map(user => 
-      this.getUserPresence(user.id)
-        .then(presence => ({
-          user_id: user.id,
-          user_name: user.name,
-          ...presence
-        }))
-        .catch(() => ({
-          user_id: user.id,
-          user_name: user.name,
-          presence: 'unknown',
-          error: true
-        }))
-    );
-    
-    const presenceResults = await Promise.all(presencePromises);
-    
-    return {
-      ok: true,
-      users: presenceResults
-    };
-  }
-
+  
   /**
    * Verify a request signature from Slack
    * @param signature - The X-Slack-Signature header
    * @param timestamp - The X-Slack-Request-Timestamp header
-   * @param body - The raw request body
-   * @returns Whether the signature is valid
+   * @param body - The request body
+   * @returns True if the signature is valid
    */
   verifySignature(signature: string, timestamp: string, body: string): boolean {
     if (!this.config.signingSecret) {
-      throw new Error('Signing secret is not configured');
+      return false;
     }
-
+    
     const hmac = crypto.createHmac('sha256', this.config.signingSecret);
     const [version, hash] = signature.split('=');
     
-    hmac.update(`${version}:${timestamp}:${body}`);
-    const calculatedHash = hmac.digest('hex');
-    
-    return hash === calculatedHash;
-  }
-
-  /**
-   * Revoke the access token
-   */
-  async revokeToken(token: string): Promise<boolean> {
-    const response = await fetch('https://slack.com/api/auth.revoke', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        token,
-      }),
-    });
-
-    if (!response.ok) {
+    // Check if the timestamp is too old (>5 minutes)
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (Math.abs(currentTime - parseInt(timestamp, 10)) > 300) {
       return false;
     }
-
-    const data = await response.json() as SlackApiResponse;
-    return data.ok;
-  }
-
-  /**
-   * Get user info
-   */
-  async getUserInfo(accessToken: string): Promise<Record<string, unknown>> {
-    const response = await fetch('https://slack.com/api/users.identity', {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get user info: ${await response.text()}`);
-    }
-
-    const data = await response.json() as SlackApiResponse;
     
-    if (!data.ok) {
-      throw new Error(`Failed to get user info: ${data.error}`);
-    }
-
-    return data;
-  }
-
-  /**
-   * Get access token
-   */
-  private async getAccessToken(): Promise<OAuth2Tokens> {
-    // If we have a valid access token, return it
-    if (this.config.accessToken && this.config.expiresAt && this.config.expiresAt > Date.now()) {
-      return {
-        access_token: this.config.accessToken,
-        token_type: 'Bearer',
-        refresh_token: this.config.refreshToken,
-      };
-    }
-
-    // If we have a refresh token, use it to get a new access token
-    if (this.config.refreshToken) {
-      const tokens = await this.refreshAccessToken(this.config.refreshToken);
-      
-      // Update the config with the new tokens
-      this.config = {
-        ...this.config,
-        accessToken: tokens.access_token,
-        expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
-      };
-
-      return tokens;
-    }
-
-    throw new Error('No valid access token or refresh token available');
+    const baseString = `${version}:${timestamp}:${body}`;
+    const computedHash = hmac.update(baseString).digest('hex');
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(hash),
+      Buffer.from(computedHash)
+    );
   }
 }
 
 /**
- * Create a new Slack integration instance
+ * Create a Slack integration
+ * @param config - Configuration for the Slack integration
+ * @returns A Slack integration instance
  */
 export function createSlackIntegration(config: SlackConfig): SlackIntegration {
   return new SlackIntegration(config);

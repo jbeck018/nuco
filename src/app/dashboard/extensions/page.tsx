@@ -11,7 +11,6 @@ import { AlertCircle, Download, Settings, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DashboardHeader } from "@/components/dashboard/header";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { EmptyPlaceholder } from "@/components/dashboard/empty-placeholder";
 
 interface Extension {
@@ -147,7 +146,7 @@ export default function ExtensionsPage() {
   };
 
   return (
-    <DashboardShell>
+    <>
       <DashboardHeader
         heading="Extensions"
         text="Manage your installed extensions and discover new ones from the marketplace."
@@ -323,6 +322,6 @@ export default function ExtensionsPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardShell>
+    </>
   );
 } 

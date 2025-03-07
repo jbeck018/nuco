@@ -7,6 +7,10 @@ import { z } from "zod";
 //
 // Import types from next-auth to extend
 import type { DefaultSession } from "next-auth";
+import { db } from "@/lib/db";
+import { integrations } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
+import { IntegrationType } from "@/lib/integrations";
 
 // Extend the built-in types
 declare module "next-auth" {
@@ -45,6 +49,54 @@ declare module "next-auth/jwt" {
 import { verifyPassword } from "./password";
 import { getUserByEmail } from "./data";
 import { getUserOrganizations, createOrganization } from "@/lib/organizations/service";
+
+/**
+ * Helper function to create or update an integration in the database
+ */
+async function createOrUpdateIntegration(userId: string, provider: IntegrationType, accessToken: string, organizationId?: string) {
+  try {
+    // Check if the integration already exists
+    const existingIntegrations = await db.select().from(integrations).where(
+      and(
+        eq(integrations.userId, userId),
+        eq(integrations.type, provider)
+      )
+    );
+    
+    const config = { accessToken };
+    
+    if (existingIntegrations.length > 0) {
+      // Update the existing integration
+      await db.update(integrations)
+        .set({
+          config,
+          isActive: true,
+          updatedAt: new Date(),
+          organizationId: organizationId || existingIntegrations[0].organizationId
+        })
+        .where(eq(integrations.id, existingIntegrations[0].id));
+      
+      return existingIntegrations[0].id;
+    } else {
+      // Create a new integration
+      const [newIntegration] = await db.insert(integrations)
+        .values({
+          userId,
+          type: provider,
+          name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Integration`,
+          config,
+          isActive: true,
+          organizationId
+        })
+        .returning();
+      
+      return newIntegration.id;
+    }
+  } catch (error) {
+    console.error(`Error creating/updating ${provider} integration:`, error);
+    return null;
+  }
+}
 
 /**
  * NextAuth configuration
@@ -95,6 +147,16 @@ export const authConfig: NextAuthConfig = {
             // If user has organizations but no default, set the first one as default
             if (organizations.length > 0 && !token.defaultOrganizationId) {
               token.defaultOrganizationId = organizations[0].id;
+            }
+            
+            // Create or update the integration in the database for OAuth providers
+            if (account.provider === 'salesforce' || account.provider === 'hubspot') {
+              await createOrUpdateIntegration(
+                token.id as string,
+                account.provider as IntegrationType,
+                account.access_token as string,
+                token.defaultOrganizationId as string | undefined
+              );
             }
           } catch (error) {
             console.error("Error handling organizations during OAuth sign-in:", error);

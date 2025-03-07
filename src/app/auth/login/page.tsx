@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { FaGoogle, FaHubspot, FaSalesforce } from "react-icons/fa";
 
 // Login form schema
 const loginSchema = z.object({
@@ -188,6 +189,7 @@ export default function LoginPage() {
             onClick={() => handleOAuthSignIn("google")}
             disabled={isLoading}
           >
+            <FaGoogle className="mr-2 h-4 w-4" />
             Google
           </Button>
           <Button
@@ -196,6 +198,7 @@ export default function LoginPage() {
             onClick={() => handleOAuthSignIn("salesforce")}
             disabled={isLoading}
           >
+            <FaSalesforce className="mr-2 h-4 w-4" />
             Salesforce
           </Button>
           <Button
@@ -204,6 +207,7 @@ export default function LoginPage() {
             onClick={() => handleOAuthSignIn("hubspot")}
             disabled={isLoading}
           >
+            <FaHubspot className="mr-2 h-4 w-4" />
             HubSpot
           </Button>
         </div>

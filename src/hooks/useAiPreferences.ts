@@ -6,14 +6,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useTRPC } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/trpc';
 import { useSession } from 'next-auth/react';
-import { AiSettings } from '@/lib/db/schema/metadata';
 import { useToast } from '@/components/ui/use-toast';
 
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
+import { AiSettings } from '@/lib/db/types/metadata-types';
 
 export interface UseAiPreferencesResult {
   preferences: AiSettings | null;
@@ -93,7 +93,6 @@ export function useAiPreferences(): UseAiPreferencesResult {
     { 
       enabled: !!session?.user?.id,
       staleTime: 1000 * 60 * 5, // 5 minutes
-      queryKey: ['metadata.getUserFlexiblePreferences', { key: 'aiSettings' }],
     }
   ));
 

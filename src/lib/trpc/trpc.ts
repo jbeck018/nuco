@@ -8,7 +8,7 @@ export const { TRPCProvider, useTRPC, useTRPCClient } = createTRPCContext<AppRou
 export const queryClient = new QueryClient();
 
 const trpcClient = createTRPCClient<AppRouter>({
-  links: [httpBatchLink({ url: 'http://localhost:2022' })],
+  links: [httpBatchLink({ url: '/api/trpc' })],
 });
 
 export const trpc = createTRPCOptionsProxy<AppRouter>({

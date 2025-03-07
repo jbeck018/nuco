@@ -4,10 +4,8 @@
  * A custom hook that simplifies creating optimistic mutations with tRPC and TanStack Query.
  * This hook provides a standardized way to implement optimistic updates across the application.
  */
-import { useTRPC } from '@/lib/trpc/client';
 import { UseTRPCMutationOptions } from '@trpc/react-query/shared';
-
-import { useQueryClient } from "@tanstack/react-query";
+import { useTRPC } from '@/lib/trpc/trpc';
 
 // Define a simple path type without unused generic parameter
 type Path = string;
@@ -102,11 +100,11 @@ export function useOptimisticMutation<
 >(
   options: UseOptimisticMutationOptions<TPath, TInput, TMutationPath>
 ) {
-  const queryClient = useQueryClient();
+  const trpcClient = useTRPC();
   
   // Access the mutation procedure
   const mutationPath = options.mutationPath;
-  const mutation = getNestedProcedure(trpc, mutationPath);
+  const mutation = getNestedProcedure(trpcClient, mutationPath);
   
   if (!mutation || !mutation.hasOwnProperty('useMutation')) {
     throw new Error(`Mutation not found at path: ${mutationPath}`);
@@ -114,7 +112,7 @@ export function useOptimisticMutation<
   
   // Access the query utilities
   const queryPath = options.queryPath;
-  const queryProcedure = getQueryUtils(utils, queryPath);
+  const queryProcedure = getQueryUtils(trpcClient, queryPath);
   
   // Create a mutation with optimistic updates
   const mutationFn = (mutation as MutationProcedure).useMutation;

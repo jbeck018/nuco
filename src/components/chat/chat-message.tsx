@@ -40,10 +40,11 @@ export function ChatMessage({
     <div
       className={cn(
         'flex w-full items-start gap-4 p-4',
-        role === 'user' ? 'bg-muted/50' : 'bg-background'
+        role === 'user' ? 'bg-muted/50' : 'bg-background',
+        'border-b border-border/40'
       )}
     >
-      <Avatar className="h-8 w-8">
+      <Avatar className="h-8 w-8 shrink-0">
         {role === 'user' ? (
           <>
             <AvatarImage src="/avatars/user.png" alt="User" />
@@ -56,7 +57,7 @@ export function ChatMessage({
           </>
         )}
       </Avatar>
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-2 overflow-hidden">
         <div className="flex items-center gap-2">
           <div className="font-semibold">
             {role === 'user' ? 'You' : 'AI Assistant'}
@@ -67,7 +68,7 @@ export function ChatMessage({
             </div>
           )}
         </div>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
+        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
           {isLoading || messageStatus === 'thinking' ? (
             <div className="flex items-center gap-2">
               <LoadingSpinner className="h-4 w-4" />

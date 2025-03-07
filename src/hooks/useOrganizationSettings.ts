@@ -4,8 +4,7 @@
  * A hook for managing organization settings with optimistic updates.
  * This hook provides a convenient interface for reading and updating organization settings.
  */
-import { useTRPC } from '@/lib/trpc/client';
-import { toast } from '@/components/ui/use-toast';
+import { useTRPC } from '@/lib/trpc/trpc';
 import { useCallback } from 'react';
 
 import { useQuery } from "@tanstack/react-query";
@@ -23,9 +22,14 @@ export interface SlackSettings {
 }
 
 export interface AiSettings {
-  defaultModel?: string;
-  maxTokensPerRequest?: number;
-  promptTemplates?: Array<{ id: string; name: string; isDefault?: boolean }>;
+  defaultModel: string;
+  maxTokensPerRequest: number;
+  promptTemplates: Array<{ id: string; name: string; isDefault?: boolean }>;
+  contextSettings?: {
+    includeUserHistory: boolean;
+    includeOrganizationData: boolean;
+    contextWindowSize: number;
+  };
 }
 
 export interface OrganizationSettings {
@@ -34,7 +38,7 @@ export interface OrganizationSettings {
   updatedAt: string;
   organizationId: string;
   defaultIntegrations: string[] | null;
-  memberDefaultRole: string;
+  memberDefaultRole: "admin" | "member";
   slackSettings: SlackSettings | null;
   aiSettings: AiSettings | null;
 }
@@ -47,14 +51,15 @@ export const useOrganizationSettings = (organizationId: string) => {
   const queryClient = useQueryClient();
 
   // Query for fetching organization settings
-  const settingsQuery = useQuery(trpc.metadata.getOrganizationSettings.queryOptions(
-    { organizationId },
-    {
-      enabled: !!organizationId,
-      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-      queryKey: ['metadata.getOrganizationSettings', { organizationId }],
-    }
-  ));
+  const settingsQuery = useQuery(
+    trpc.metadata.getOrganizationSettings.queryOptions(
+      { organizationId },
+      {
+        enabled: !!organizationId,
+        staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      }
+    )
+  );
 
   const { data: settings, isLoading, error } = settingsQuery;
 
@@ -71,9 +76,10 @@ export const useOrganizationSettings = (organizationId: string) => {
       if (previousData) {
         queryClient.setQueryData(
           trpc.metadata.getOrganizationSettings.queryKey({ organizationId }),
-          oldData => {
+          (oldData: OrganizationSettings | undefined) => {
             if (!oldData) return oldData;
             
+            // Create updated data by merging old and new
             return {
               ...oldData,
               ...newData,
@@ -89,108 +95,101 @@ export const useOrganizationSettings = (organizationId: string) => {
         );
       }
       
-      // Return context with previous data for rollback in case of failure
       return { previousData };
     },
     
-    onError: (err, _, context) => {
-      // Rollback to previous data if there was an error
+    // If the mutation fails, roll back to the previous value
+    onError: (err, newData, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(
           trpc.metadata.getOrganizationSettings.queryKey({ organizationId }),
           context.previousData
         );
       }
-      
-      // Show error toast
-      toast({
-        title: 'Failed to update settings',
-        description: err.message || 'Please try again later',
-        variant: 'destructive',
-      });
     },
     
-    onSuccess: () => {
-      // Show success toast
-      toast({
-        title: 'Settings updated',
-        description: 'Organization settings have been saved',
-      });
-    },
-    
+    // After success or error, invalidate the query to ensure data consistency
     onSettled: () => {
-      // Invalidate the query to refetch fresh data
       queryClient.invalidateQueries(trpc.metadata.getOrganizationSettings.queryFilter({ organizationId }));
     },
   }));
 
   // Convenience method for updating member default role
-  const setMemberDefaultRole = useCallback((memberDefaultRole: 'member' | 'admin') => {
+  const setMemberDefaultRole = useCallback((role: "admin" | "member") => {
     updateMutation.mutate({
       organizationId,
-      memberDefaultRole,
+      memberDefaultRole: role,
     });
   }, [organizationId, updateMutation]);
 
   // Convenience method for updating default integrations
-  const setDefaultIntegrations = useCallback((defaultIntegrations: string[]) => {
+  const setDefaultIntegrations = useCallback((integrations: string[]) => {
     updateMutation.mutate({
       organizationId,
-      defaultIntegrations,
+      defaultIntegrations: integrations,
     });
   }, [organizationId, updateMutation]);
 
   // Convenience method for toggling a specific integration
   const toggleDefaultIntegration = useCallback((integrationId: string, enabled: boolean) => {
-    const currentIntegrations = settings?.defaultIntegrations || [];
+    const currentSettings = settings as OrganizationSettings | undefined;
+    const currentIntegrations = currentSettings?.defaultIntegrations || [];
     const newIntegrations = enabled
       ? [...currentIntegrations, integrationId]
-      : currentIntegrations.filter(id => id !== integrationId);
+      : currentIntegrations.filter((id: string) => id !== integrationId);
     
     updateMutation.mutate({
       organizationId,
       defaultIntegrations: newIntegrations,
     });
-  }, [organizationId, settings?.defaultIntegrations, updateMutation]);
+  }, [organizationId, settings, updateMutation]);
 
   // Convenience method for updating Slack settings
   const setSlackSettings = useCallback((slackSettings: Partial<SlackSettings>) => {
+    const currentSettings = settings as OrganizationSettings | undefined;
     updateMutation.mutate({
       organizationId,
       slackSettings: {
-        ...(settings?.slackSettings || {}),
+        ...(currentSettings?.slackSettings || {}),
         ...slackSettings,
       },
     });
-  }, [organizationId, settings?.slackSettings, updateMutation]);
+  }, [organizationId, settings, updateMutation]);
 
   // Convenience method for updating Slack webhook URL
   const setSlackWebhookUrl = useCallback((webhookUrl: string) => {
     setSlackSettings({ webhookUrl });
   }, [setSlackSettings]);
 
-  // Convenience method for enabling/disabling Slack notifications
-  const setSlackNotifications = useCallback((config: { 
-    notifyOnNewMembers?: boolean; 
+  // Convenience method for updating Slack notification settings
+  const setSlackNotifications = useCallback((notifications: {
+    notifyOnNewMembers?: boolean;
     notifyOnIntegrationChanges?: boolean;
   }) => {
-    setSlackSettings(config);
+    setSlackSettings(notifications);
   }, [setSlackSettings]);
 
   // Convenience method for updating AI settings
   const setAiSettings = useCallback((aiSettings: Partial<AiSettings>) => {
+    const currentSettings = settings as OrganizationSettings | undefined;
+    const currentAiSettings = currentSettings?.aiSettings || {
+      defaultModel: '',
+      maxTokensPerRequest: 0,
+      promptTemplates: []
+    };
+    
     updateMutation.mutate({
       organizationId,
       aiSettings: {
-        ...(settings?.aiSettings || {}),
+        ...currentAiSettings,
         ...aiSettings,
       },
     });
-  }, [organizationId, settings?.aiSettings, updateMutation]);
+  }, [organizationId, settings, updateMutation]);
 
   return {
     // Data
-    settings,
+    settings: settings as OrganizationSettings | undefined,
     isLoading,
     error,
     
@@ -208,13 +207,13 @@ export const useOrganizationSettings = (organizationId: string) => {
     setAiSettings,
     
     // Computed properties for convenience
-    memberDefaultRole: settings?.memberDefaultRole || 'member',
-    defaultIntegrations: settings?.defaultIntegrations || [],
-    slackSettings: settings?.slackSettings || null,
-    aiSettings: settings?.aiSettings || null,
+    memberDefaultRole: (settings as OrganizationSettings | undefined)?.memberDefaultRole || 'member',
+    defaultIntegrations: (settings as OrganizationSettings | undefined)?.defaultIntegrations || [],
+    slackSettings: (settings as OrganizationSettings | undefined)?.slackSettings || null,
+    aiSettings: (settings as OrganizationSettings | undefined)?.aiSettings || null,
     
     // Specific flag accessors
-    hasSlackIntegration: (settings?.defaultIntegrations || []).includes('slack'),
-    hasHubspotIntegration: (settings?.defaultIntegrations || []).includes('hubspot'),
+    hasSlackIntegration: ((settings as OrganizationSettings | undefined)?.defaultIntegrations || []).includes('slack'),
+    hasHubspotIntegration: ((settings as OrganizationSettings | undefined)?.defaultIntegrations || []).includes('hubspot'),
   };
 }; 

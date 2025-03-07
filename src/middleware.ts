@@ -15,7 +15,34 @@ const protectedRoutes = [
 ];
 
 // Define auth routes that should redirect to dashboard if already authenticated
-const authRoutes = ["/auth/login", "/auth/signup"];
+const authRoutes = [
+  "/auth/login", 
+  "/auth/signup", 
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/verify-email"
+];
+
+// Define public routes that should be accessible regardless of authentication status
+const publicRoutes = [
+  "/about",
+  "/pricing",
+  "/contact",
+  "/privacy",
+  "/terms",
+  "/api/webhooks",
+  "/_next",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml"
+];
+
+// Define landing page routes that should redirect to dashboard when authenticated
+const landingRoutes = [
+  "/",
+  "/home",
+  "/landing"
+];
 
 // Define static asset paths that should be cached
 const staticAssetPaths = [
@@ -39,6 +66,14 @@ function getCacheSettings(pathname: string): string {
   
   // Default cache settings for other routes
   return "public, max-age=0, must-revalidate";
+}
+
+// Helper function to check if a path matches any of the routes in the array
+function matchesAnyRoute(pathname: string, routes: string[]): boolean {
+  return routes.some(route => 
+    pathname === route || 
+    pathname.startsWith(`${route}/`)
+  );
 }
 
 export async function middleware(request: NextRequest) {
@@ -74,59 +109,53 @@ export async function middleware(request: NextRequest) {
   );
   
   // Check if the path is a protected route
-  const isProtectedRoute = protectedRoutes.some((route) => 
-    pathname.startsWith(route)
-  );
+  const isProtectedRoute = matchesAnyRoute(pathname, protectedRoutes);
   
   // Check if the path is an auth route
-  const isAuthRoute = authRoutes.some((route) => 
-    pathname.startsWith(route)
-  );
+  const isAuthRoute = matchesAnyRoute(pathname, authRoutes);
   
-  // If the user is not authenticated and trying to access a protected route
-  if (!user && (
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/chat') ||
-    pathname.startsWith('/integrations') ||
-    pathname.startsWith('/org') ||
-    pathname.startsWith('/settings')
-  )) {
-    console.log(`Redirecting unauthenticated user from ${pathname} to login page`);
+  // Check if the path is a public route
+  const isPublicRoute = matchesAnyRoute(pathname, publicRoutes);
+  
+  // Check if the path is a landing route
+  const isLandingRoute = matchesAnyRoute(pathname, landingRoutes);
+  
+  console.log(`Path analysis: ${pathname}, Protected: ${isProtectedRoute}, Auth: ${isAuthRoute}, Public: ${isPublicRoute}, Landing: ${isLandingRoute}`);
+  
+  // CASE 1: Unauthenticated user trying to access protected route -> redirect to login
+  if (!user && isProtectedRoute) {
+    console.log(`Redirecting unauthenticated user from protected route ${pathname} to login`);
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(url);
   }
   
-  // If the user is authenticated and trying to access an organization route
+  // CASE 2: Authenticated user trying to access auth route -> redirect to dashboard
+  if (user && isAuthRoute) {
+    console.log(`Redirecting authenticated user from auth route ${pathname} to dashboard`);
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  
+  // CASE 3: Authenticated user trying to access landing route -> redirect to dashboard
+  if (user && isLandingRoute) {
+    console.log(`Redirecting authenticated user from landing route ${pathname} to dashboard`);
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  
+  // CASE 4: If the user is authenticated and trying to access an organization route
   if (user && pathname.startsWith('/org')) {
     // Extract the organization slug from the URL
     const orgSlug = pathname.split('/')[2];
     
     // If no organization slug is provided, redirect to the default organization
     if (!orgSlug && user.defaultOrganizationId) {
-      // We need to fetch the organization slug from the database
-      // For now, redirect to a page that will handle this
+      console.log(`Redirecting from empty org slug to dashboard`);
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
-    
-    // Organization access control will be handled by the page components
-    // using the OrganizationProvider
-  }
-  
-  // If the route is protected and the user is not authenticated, redirect to login
-  if (isProtectedRoute && !user) {
-    console.log(`Protected route check: Redirecting from ${pathname} to login page`);
-    const url = new URL("/auth/login", request.url);
-    url.searchParams.set("callbackUrl", encodeURI(pathname));
-    return NextResponse.redirect(url);
-  }
-  
-  // If the route is an auth route and the user is already authenticated, redirect to dashboard
-  if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   
   // Continue with the request for all other cases
+  console.log(`Continuing with request for ${pathname}`);
   return response;
 }
 
@@ -139,6 +168,7 @@ export const config = {
      * - public files (public assets)
      */
     "/((?!favicon.ico|public).*)",
+    '/',  // Explicitly match the root path
     '/dashboard/:path*',
     '/chat/:path*',
     '/integrations/:path*',

@@ -4,7 +4,7 @@
  * This file contains custom hooks for fetching and managing dashboard data
  * using TanStack Query and tRPC.
  */
-import { useTRPC } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/trpc';
 
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
@@ -88,9 +88,12 @@ export const useUserOrganizations = () => {
  */
 export const useOrganization = (organizationId: string | undefined) => {
   const trpc = useTRPC();
-  const { data, isLoading, error, refetch } = organizationId ? 
-    useQuery(trpc.organization.getById.queryOptions({ id: organizationId })) : 
-    { data: undefined, isLoading: false, error: null, refetch: () => Promise.resolve() };
+  const { data, isLoading, error, refetch } = useQuery(
+    trpc.organization.getById.queryOptions(
+      { id: organizationId || '' },
+      { enabled: !!organizationId }
+    )
+  );
 
   return {
     organization: data,
@@ -105,9 +108,12 @@ export const useOrganization = (organizationId: string | undefined) => {
  */
 export const useOrganizationMembers = (organizationId: string | undefined) => {
   const trpc = useTRPC();
-  const { data, isLoading, error, refetch } = organizationId ? 
-    useQuery(trpc.organization.getMembers.queryOptions({ id: organizationId })) : 
-    { data: undefined, isLoading: false, error: null, refetch: () => Promise.resolve() };
+  const { data, isLoading, error, refetch } = useQuery(
+    trpc.organization.getMembers.queryOptions(
+      { id: organizationId || '' },
+      { enabled: !!organizationId }
+    )
+  );
 
   return {
     members: data || [],
@@ -122,9 +128,9 @@ export const useOrganizationMembers = (organizationId: string | undefined) => {
  */
 export const useUserIntegrations = (organizationId?: string) => {
   const trpc = useTRPC();
-  const { data, isLoading, error, refetch } = useQuery(trpc.integration.getAll.queryOptions(
-    organizationId ? { organizationId } : undefined
-  ));
+  const { data, isLoading, error, refetch } = useQuery(
+    trpc.integration.getAll.queryOptions(organizationId ? { organizationId } : undefined)
+  );
 
   return {
     integrations: data || [],
@@ -139,9 +145,12 @@ export const useUserIntegrations = (organizationId?: string) => {
  */
 export const useIntegration = (integrationId: string | undefined) => {
   const trpc = useTRPC();
-  const { data, isLoading, error, refetch } = integrationId ?
-    useQuery(trpc.integration.getById.queryOptions({ id: integrationId })) :
-    { data: undefined, isLoading: false, error: null, refetch: () => Promise.resolve() };
+  const { data, isLoading, error, refetch } = useQuery(
+    trpc.integration.getById.queryOptions(
+      { id: integrationId || '' },
+      { enabled: !!integrationId }
+    )
+  );
 
   return {
     integration: data,

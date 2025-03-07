@@ -5,12 +5,11 @@
  * This demonstrates how to use the optimistic UI hooks for form handling.
  */
 'use client';;
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useOptimisticOrganization } from '@/hooks/useOptimisticDashboard';
-import { useTRPCForm } from '@/hooks/useOptimisticForm';
 import { useOrganization } from '@/hooks/useDashboard';
-import { useTRPC } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/trpc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,8 +17,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-import { useMutation } from "@tanstack/react-query";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from '@/components/ui/use-toast';
+import { useMutation } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Form validation schema
 const formSchema = z.object({
@@ -28,35 +30,126 @@ const formSchema = z.object({
   billingEmail: z.string().email().optional().or(z.literal('')),
 });
 
+// Type for form values
+type FormValues = z.infer<typeof formSchema>;
+
+// Type for organization data
+interface OrganizationData {
+  id: string;
+  name: string;
+  website: string | null;
+  billingEmail: string | null;
+  // Add other fields as needed
+}
+
 export function OptimisticOrganizationSettings({ organizationId }: { organizationId: string }) {
   const trpc = useTRPC();
   const { organization, isLoading, error } = useOrganization(organizationId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
 
-  // Use our optimistic update hook - moved outside of conditionals
+  // Use our optimistic update hook
   const { deleteOrganization, isDeleting } = useOptimisticOrganization(organizationId);
 
-  // Get the mutation directly from tRPC
-  const updateMutation = useMutation(trpc.organization.update.mutationOptions());
-
-  // Use our form hook with the mutation - moved outside of conditionals
-  const form = useTRPCForm(updateMutation, {
-    defaultValues: {
-      name: organization?.name || '',
-      website: organization?.website || '',
-      billingEmail: organization?.billingEmail || '',
+  // Create update mutation with optimistic updates
+  const updateMutation = useMutation(trpc.organization.update.mutationOptions({
+    onMutate: async (data) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries(trpc.organization.getById.queryFilter({ id: data.id }));
+      
+      // Get current data from cache
+      const previousOrganization = queryClient.getQueryData(trpc.organization.getById.queryKey({ id: data.id }));
+      
+      // Optimistically update the cache
+      queryClient.setQueryData(trpc.organization.getById.queryKey({ id: data.id }), (old) => {
+        if (!old) return old;
+        
+        return {
+          ...old,
+          name: data.name || old.name,
+          website: data.website || old.website,
+          billingEmail: data.billingEmail || old.billingEmail,
+        };
+      });
+      
+      // Return context with previous data for rollback
+      return { previousOrganization };
     },
-    validationSchema: formSchema,
-    successToast: {
-      description: "Organization settings have been updated successfully",
+    
+    onSuccess: () => {
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Organization settings have been updated successfully",
+      });
+    },
+    
+    onError: (error, variables, context) => {
+      // Rollback to previous data if there was an error
+      if (context?.previousOrganization) {
+        queryClient.setQueryData(
+          trpc.organization.getById.queryKey({ id: variables.id }),
+          context.previousOrganization
+        );
+      }
+      
+      console.error("Error updating organization:", error);
+    },
+    
+    onSettled: () => {
+      // Invalidate queries to refetch fresh data
+      queryClient.invalidateQueries(trpc.organization.getById.pathFilter());
+    }
+  }));
+
+  // Create a form with react-hook-form directly
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: '',
+      website: '',
+      billingEmail: '',
     },
   });
 
+  // Update form values when organization data is loaded
+  useEffect(() => {
+    if (organization) {
+      const org = organization as unknown as OrganizationData;
+      form.reset({
+        name: org.name || '',
+        website: org.website || '',
+        billingEmail: org.billingEmail || '',
+      });
+    }
+  }, [organization, form]);
+
   // Form submission handler
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
-    // The useTRPCForm hook handles the mutation
-    // This is just a placeholder for any additional logic
-    console.log("Form submitted:", data);
+  const onSubmit = async (data: FormValues) => {
+    try {
+      setIsSubmitting(true);
+      
+      // Use the mutation to update the organization
+      await updateMutation.mutateAsync({
+        id: organizationId,
+        ...data,
+      });
+      
+      // Success toast is handled by the mutation's onSuccess callback
+      console.log("Form submitted:", data);
+    } catch (error) {
+      console.error("Error updating organization:", error);
+      
+      // Show error toast
+      toast({
+        title: "Error",
+        description: "Failed to update organization settings",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteOrganization = () => {
@@ -153,8 +246,8 @@ export function OptimisticOrganizationSettings({ organizationId }: { organizatio
                 )}
               />
               
-              <Button type="submit" disabled={form.isSubmitting}>
-                {form.isSubmitting ? 'Saving...' : 'Save Changes'}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>
             </form>
           </Form>

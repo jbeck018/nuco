@@ -11,7 +11,7 @@ import { createContext } from '@/lib/trpc/server';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { trpc: string } }
+  { params }: { params: { trpc: string | string[] } }
 ) {
   return handleRequest(request, params);
 }
@@ -21,7 +21,7 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { trpc: string } }
+  { params }: { params: { trpc: string | string[] } }
 ) {
   return handleRequest(request, params);
 }
@@ -31,9 +31,19 @@ export async function POST(
  */
 async function handleRequest(
   request: Request,
-  { trpc }: { trpc: string }
+  params: { trpc: string | string[] }
 ) {
-  console.log('handleRequest', trpc);
+  // In Next.js App Router, dynamic route parameters might be promises
+  // so we need to ensure we're handling them properly
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const trpcParam = resolvedParams.trpc;
+  
+  const trpcRoute = Array.isArray(trpcParam) 
+    ? trpcParam.join(',')
+    : trpcParam;
+    
+  console.log('handleRequest', trpcRoute);
+  
   return fetchRequestHandler({
     endpoint: '/api/trpc',
     req: request,

@@ -5,10 +5,11 @@
  * It serves as the central point for managing all integrations in the application.
  */
 
-import { OAuth2Integration } from './oauth2-base';
+import { auth } from '@/lib/auth';
 import { SalesforceIntegration } from './salesforce';
 import { HubSpotIntegration } from './hubspot';
 import { createSlackIntegration } from './slack';
+import { ExtendedSession, isAuthenticatedWithProvider } from './oauth2-base';
 
 /**
  * Available integration types
@@ -26,6 +27,14 @@ export interface IntegrationDetails {
 }
 
 /**
+ * Base interface for all integrations
+ */
+export interface Integration {
+  getAuthStatus(): Promise<{ isAuthenticated: boolean; accountId?: string }>;
+  disconnect(): Promise<boolean>;
+}
+
+/**
  * Integration Factory class
  * 
  * This class provides methods for creating and managing integrations.
@@ -36,15 +45,27 @@ export class IntegrationFactory {
    * @param type The integration type
    * @returns An instance of the integration
    */
-  static createIntegration(type: IntegrationType): OAuth2Integration {
+  static async createIntegration(type: IntegrationType): Promise<Integration> {
     switch (type) {
       case 'salesforce':
         return new SalesforceIntegration();
       case 'hubspot':
         return new HubSpotIntegration();
       case 'google':
-        // TODO: Implement Google integration
-        throw new Error('Google integration not implemented yet');
+        // Return a dummy integration for Google that's only used for login
+        return {
+          async getAuthStatus() {
+            // Check if user is authenticated with Google via NextAuth
+            const session = await auth() as ExtendedSession;
+            return { 
+              isAuthenticated: isAuthenticatedWithProvider(session, 'google'),
+              accountId: session?.user?.id
+            };
+          },
+          async disconnect() {
+            return true;
+          }
+        };
       case 'slack':
         return createSlackIntegration({
           clientId: process.env.SLACK_CLIENT_ID || '',
@@ -58,7 +79,7 @@ export class IntegrationFactory {
             'chat:write.public',
             'incoming-webhook',
           ],
-        }) as unknown as OAuth2Integration;
+        });
       default:
         throw new Error(`Unknown integration type: ${type}`);
     }
@@ -69,7 +90,8 @@ export class IntegrationFactory {
    * @returns An array of integration types
    */
   static getAvailableIntegrations(): IntegrationType[] {
-    return ['salesforce', 'hubspot', 'google', 'slack'];
+    // Exclude Google from dashboard integrations as it's only used for login
+    return ['salesforce', 'hubspot', 'slack'];
   }
 
   /**
@@ -109,6 +131,36 @@ export class IntegrationFactory {
         };
       default:
         throw new Error(`Unknown integration type: ${type}`);
+    }
+  }
+
+  /**
+   * Check if a user is authenticated with an integration
+   * @param type The integration type
+   * @returns Authentication status
+   */
+  static async getAuthStatus(type: IntegrationType): Promise<{ isAuthenticated: boolean; accountId?: string }> {
+    const session = await auth() as ExtendedSession;
+    
+    if (!session?.user) {
+      return { isAuthenticated: false };
+    }
+
+    // Check if the user is authenticated with the provider
+    if (isAuthenticatedWithProvider(session, type)) {
+      return { 
+        isAuthenticated: true,
+        accountId: session.user.id
+      };
+    }
+
+    // For custom integrations, create the integration and check auth status
+    try {
+      const integration = await IntegrationFactory.createIntegration(type);
+      return await integration.getAuthStatus();
+    } catch (error) {
+      console.error(`Error checking auth status for ${type}:`, error);
+      return { isAuthenticated: false };
     }
   }
 } 

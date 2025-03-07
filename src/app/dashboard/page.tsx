@@ -6,7 +6,6 @@ import { DashboardSkeleton } from '@/components/dashboard/dashboard-skeleton';
 import { getRecentChats } from '@/lib/chat/recent';
 import { getIntegrationStats } from '@/lib/integrations/stats';
 import { getOrganizationDetails } from '@/lib/organizations/details';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { DashboardCards } from '@/components/dashboard/dashboard-cards';
 
 // Metadata for the page
@@ -40,7 +39,7 @@ export default async function DashboardPage() {
   preload(dataPromise);
   
   return (
-    <DashboardShell>
+    <>
       <DashboardHeader
         title="Dashboard"
         description="Overview of your AI-powered integrations and recent activity."
@@ -49,7 +48,7 @@ export default async function DashboardPage() {
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardContent dataPromise={dataPromise} />
       </Suspense>
-    </DashboardShell>
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 /**
  * metadata.ts
  * 
- * This file defines the schema for user preferences and settings metadata.
+ * This file defines the schema for general metadata.
  * It provides a flexible way to store key-value pairs for different entities.
  */
 import { pgTable, uuid, varchar, jsonb, timestamp, index } from 'drizzle-orm/pg-core';

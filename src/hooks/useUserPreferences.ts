@@ -4,9 +4,8 @@
  * A hook for managing user preferences with optimistic updates.
  * This hook provides a convenient interface for reading and updating user preferences.
  */
-import { useTRPC } from '@/lib/trpc/client';
+import { useTRPC } from '@/lib/trpc/trpc';
 import { useSession } from 'next-auth/react';
-import { toast } from '@/components/ui/use-toast';
 import { useCallback } from 'react';
 
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +28,16 @@ export interface Customization {
   compactMode?: boolean;
 }
 
+export interface UserPreferences {
+  id: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  theme: ThemePreference;
+  notifications: Notifications;
+  customization: Customization;
+}
+
 /**
  * Hook for managing user preferences with optimistic updates
  */
@@ -40,17 +49,16 @@ export const useUserPreferences = () => {
   const queryClient = useQueryClient();
 
   // Query for fetching user preferences
-  const preferencesQuery = useQuery(trpc.metadata.getMyPreferences.queryOptions(
-    undefined, // No input required
-    {
-      // Only run the query if we have a session
-      enabled: !!userId,
-      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-      // Updated to match the tRPC queryKey format requirements
-      // tRPC expects [path, input] format
-      queryKey: ['metadata.getMyPreferences', undefined],
-    }
-  ));
+  const preferencesQuery = useQuery(
+    trpc.metadata.getMyPreferences.queryOptions(
+      undefined, // No input required
+      {
+        // Only run the query if we have a session
+        enabled: !!userId,
+        staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      }
+    )
+  );
 
   const { data: preferences, isLoading, error } = preferencesQuery;
 
@@ -59,60 +67,42 @@ export const useUserPreferences = () => {
     // When mutating, cancel any outgoing refetches
     // so they don't overwrite our optimistic update
     onMutate: async (newData) => {
-      // Cancel outgoing refetches
+      // Cancel any outgoing refetches
       await queryClient.cancelQueries(trpc.metadata.getMyPreferences.pathFilter());
       
       // Get current data from cache
       const previousData = queryClient.getQueryData(trpc.metadata.getMyPreferences.queryKey());
       
-      // Optimistically update the cache with merged data
-      if (previousData) {
-        queryClient.setQueryData(trpc.metadata.getMyPreferences.queryKey(), oldData => {
-          if (!oldData) return oldData;
-          
-          // Deep merge handling for nested objects
-          return {
-            ...oldData,
-            ...newData,
-            // For nested objects, we need to handle special merging
-            notifications: newData.notifications
-              ? { ...oldData.notifications, ...newData.notifications }
-              : oldData.notifications,
-            customization: newData.customization
-              ? { ...(oldData.customization || {}), ...newData.customization }
-              : oldData.customization
-          };
-        });
-      }
+      // Optimistically update the cache with new data
+      queryClient.setQueryData(trpc.metadata.getMyPreferences.queryKey(), oldData => {
+        if (!oldData) return oldData;
+        
+        // Create updated data by merging old and new
+        return {
+          ...oldData,
+          ...newData,
+          // Handle nested objects correctly
+          notifications: newData.notifications 
+            ? { ...(oldData.notifications || {}), ...newData.notifications } 
+            : oldData.notifications,
+          customization: newData.customization 
+            ? { ...(oldData.customization || {}), ...newData.customization } 
+            : oldData.customization,
+        };
+      });
       
-      // Return context with the previous data
       return { previousData };
     },
     
-    onError: (error, newData, context) => {
-      // If there was an error, roll back to previous data
+    // If the mutation fails, roll back to the previous value
+    onError: (err, newData, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(trpc.metadata.getMyPreferences.queryKey(), context.previousData);
       }
-      
-      // Show error toast
-      toast({
-        title: 'Failed to update preferences',
-        description: error.message,
-        variant: 'destructive',
-      });
     },
     
-    onSuccess: () => {
-      // Show success toast
-      toast({
-        title: 'Preferences updated',
-        description: 'Your preferences have been updated successfully',
-      });
-    },
-    
+    // After success or error, invalidate the query to ensure data consistency
     onSettled: () => {
-      // Invalidate the query to refetch fresh data
       queryClient.invalidateQueries(trpc.metadata.getMyPreferences.pathFilter());
     },
   }));
@@ -128,32 +118,34 @@ export const useUserPreferences = () => {
 
   const updateNotifications = useCallback(
     (notifications: Partial<Notifications>) => {
-      if (!preferences?.notifications) return;
+      const typedPreferences = preferences as UserPreferences | undefined;
+      if (!typedPreferences?.notifications) return;
       
       updateMutation.mutate({
         notifications: {
-          ...preferences.notifications,
+          ...typedPreferences.notifications,
           ...notifications,
         },
       });
     },
-    [preferences?.notifications, updateMutation]
+    [preferences, updateMutation]
   );
 
   const updateCustomization = useCallback(
     (customization: Partial<Customization>) => {
+      const typedPreferences = preferences as UserPreferences | undefined;
       updateMutation.mutate({
         customization: {
-          ...(preferences?.customization || {}),
+          ...(typedPreferences?.customization || {}),
           ...customization,
         },
       });
     },
-    [preferences?.customization, updateMutation]
+    [preferences, updateMutation]
   );
 
   return {
-    preferences,
+    preferences: preferences as UserPreferences | undefined,
     isLoading,
     error,
     updatePreferences: updateMutation.mutate,
@@ -163,8 +155,8 @@ export const useUserPreferences = () => {
     updateCustomization,
     
     // Computed properties for convenience
-    theme: preferences?.theme as ThemePreference || 'system',
-    notifications: preferences?.notifications,
-    customization: preferences?.customization,
+    theme: (preferences as UserPreferences | undefined)?.theme || 'system',
+    notifications: (preferences as UserPreferences | undefined)?.notifications,
+    customization: (preferences as UserPreferences | undefined)?.customization,
   };
 }; 

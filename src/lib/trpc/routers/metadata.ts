@@ -8,11 +8,9 @@ import { z } from 'zod';
 import { protectedProcedure, router } from '@/lib/trpc/server';
 import * as metadataService from '@/lib/metadata/service';
 import { TRPCError } from '@trpc/server';
-import {
-  insertUserPreferencesSchema,
-  insertOrganizationSettingsSchema,
-  insertIntegrationSettingsSchema,
-} from '@/lib/db/schema/metadata';
+import { insertUserPreferencesSchema } from '@/lib/db/schema/user-preferences';
+import { insertOrganizationSettingsSchema } from '@/lib/db/schema/organization-settings';
+import { insertIntegrationSettingsSchema } from '@/lib/db/schema/integration-settings';
 
 // Input validation schemas
 const entityMetadataSchema = z.object({
