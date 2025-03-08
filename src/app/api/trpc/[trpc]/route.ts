@@ -2,17 +2,22 @@
  * tRPC API route handler
  * This file handles all tRPC API requests
  */
+export const runtime = 'edge';
+
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@/lib/trpc/router';
 import { createContext } from '@/lib/trpc/server';
+
+import { TrpcParam } from '@/lib/shared-types';
 
 /**
  * Handle GET requests
  */
 export async function GET(
   request: Request,
-  { params }: { params: { trpc: string | string[] } }
+  data: { params: TrpcParam }
 ) {
+  const params = await data.params;
   return handleRequest(request, params);
 }
 
@@ -21,8 +26,9 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { trpc: string | string[] } }
+  data: { params: TrpcParam }
 ) {
+  const params = await data.params;
   return handleRequest(request, params);
 }
 

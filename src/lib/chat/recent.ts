@@ -1,5 +1,7 @@
 import { cache } from 'react';
-// import { db } from '@/lib/db';
+import { db } from '@/lib/db';
+import { conversations, messages } from '@/lib/db/schema';
+import { desc, eq, sql } from 'drizzle-orm';
 
 /**
  * Get recent chats for a user
@@ -12,28 +14,48 @@ export const getRecentChats = cache(async (userId: string, limit: number = 5) =>
         return [];
     }
   try {
-    // This would typically query your database
-    // For now, we'll return mock data
-    return [
-      {
-        id: '1',
-        title: 'Sales Pipeline Analysis',
-        timestamp: new Date().toISOString(),
-        preview: 'Analysis of Q2 sales pipeline with recommendations',
-      },
-      {
-        id: '2',
-        title: 'Customer Support Integration',
-        timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        preview: 'Setting up Zendesk integration for support tickets',
-      },
-      {
-        id: '3',
-        title: 'Marketing Campaign Planning',
-        timestamp: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-        preview: 'Planning Q3 marketing campaigns across channels',
-      },
-    ].slice(0, limit);
+    // Get recent conversations with their latest message
+    const recentConversations = await db
+      .select({
+        id: conversations.id,
+        title: conversations.title,
+        timestamp: conversations.lastMessageAt,
+      })
+      .from(conversations)
+      .where(eq(conversations.userId, userId))
+      .orderBy(desc(conversations.lastMessageAt))
+      .limit(limit);
+    
+    // For each conversation, get the latest user message to use as preview
+    const results = await Promise.all(
+      recentConversations.map(async (conversation) => {
+        // Get the latest user message for preview
+        const [latestUserMessage] = await db
+          .select({
+            content: messages.content,
+          })
+          .from(messages)
+          .where(
+            sql`${messages.conversationId} = ${conversation.id} AND ${messages.role} = 'user'`
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+        
+        // Truncate the preview if it's too long
+        const preview = latestUserMessage?.content 
+          ? latestUserMessage.content.substring(0, 60) + (latestUserMessage.content.length > 60 ? '...' : '')
+          : 'No messages';
+        
+        return {
+          id: conversation.id,
+          title: conversation.title,
+          timestamp: conversation.timestamp.toISOString(),
+          preview,
+        };
+      })
+    );
+    
+    return results;
   } catch (error) {
     console.error('Error fetching recent chats:', error);
     return [];

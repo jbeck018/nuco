@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * AI Dashboard Page
  * 
@@ -5,17 +7,11 @@
  * and user preferences integration.
  */
 
-import { Metadata } from 'next';
 import { ContextAwareAI, Message } from '@/components/ai/ContextAwareAI';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState } from 'react';
-
-export const metadata: Metadata = {
-  title: 'AI Assistant',
-  description: 'Interact with our context-aware AI assistant',
-};
 
 export default function AIDashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);

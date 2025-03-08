@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+export const runtime = 'edge';
+
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import PromptTemplateForm from "@/components/templates-components/PromptTemplateForm";
+import { IdParam } from "@/lib/shared-types";
 
 interface PromptTemplate {
   id: string;
@@ -22,11 +25,10 @@ interface PromptTemplate {
   updatedAt: string;
 }
 
-export default function EditTemplatePage({
-  params,
-}: {
-  params: { id: string };
+export default function EditTemplatePage(props: {
+  params: IdParam;
 }) {
+  const params = use(props.params);
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();

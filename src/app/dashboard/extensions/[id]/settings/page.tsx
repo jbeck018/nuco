@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+export const runtime = 'edge';
+
+import { useState, use, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -16,6 +18,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DashboardHeader } from "@/components/dashboard/header";
+import { IdParam } from "@/lib/shared-types";
 
 interface ExtensionSetting {
   type: string;
@@ -49,7 +52,10 @@ interface Extension {
 // Define a type for our form values
 type FormValues = Record<string, string | number | boolean>;
 
-export default function ExtensionSettingsPage({ params }: { params: { id: string } }) {
+export default function ExtensionSettingsPage(props: {
+  params: IdParam;
+}) {
+  const params = use(props.params);
   const router = useRouter();
   const { toast } = useToast();
   const [extension, setExtension] = useState<Extension | null>(null);
