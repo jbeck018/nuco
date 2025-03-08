@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '@/lib/utils/edge-crypto';
 import { protectedProcedure, router } from '@/lib/trpc/server';
 import { db } from '@/lib/db';
 import { conversations, messages } from '@/lib/db/schema';

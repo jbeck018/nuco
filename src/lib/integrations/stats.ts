@@ -1,5 +1,7 @@
 import { cache } from 'react';
-// import { db } from '@/lib/db';
+import { db } from '@/lib/db';
+import { integrations } from '@/lib/db/schema';
+import { count, eq, and } from 'drizzle-orm';
 
 /**
  * Get integration statistics for an organization
@@ -14,11 +16,26 @@ export const getIntegrationStats = cache(async (organizationId: string) => {
         };
     }
   try {
-    // This would typically query your database
-    // For now, we'll return mock data
+    // Get total integrations count
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(integrations)
+      .where(eq(integrations.organizationId, organizationId));
+    
+    // Get active integrations count
+    const [activeResult] = await db
+      .select({ count: count() })
+      .from(integrations)
+      .where(
+        and(
+          eq(integrations.organizationId, organizationId),
+          eq(integrations.isActive, true)
+        )
+      );
+    
     return {
-      total: 5,
-      active: 3,
+      total: totalResult?.count || 0,
+      active: activeResult?.count || 0,
     };
   } catch (error) {
     console.error('Error fetching integration stats:', error);

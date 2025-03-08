@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 
 // Set dynamic to force-dynamic to ensure the route is not cached
 export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export async function GET(req: NextRequest) {
   try {

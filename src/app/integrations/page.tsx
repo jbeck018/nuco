@@ -5,6 +5,8 @@
  * It uses the tRPC client to fetch integration data and manage integration operations.
  */
 
+export const runtime = 'edge';
+
 import { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
@@ -18,14 +20,16 @@ export const metadata: Metadata = {
   description: 'Manage your integrations with external services',
 };
 
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
+
+
 /**
  * Integrations page component
  */
-export default async function IntegrationsPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
+export default async function IntegrationsPage(props: {
+  searchParams: SearchParams;
 }) {
+  const searchParams = await props.searchParams;
   // Get the user session
   const session = await auth();
 

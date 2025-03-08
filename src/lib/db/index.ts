@@ -1,17 +1,19 @@
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { config } from "dotenv";
 import * as schema from "./schema";
+import { getEnv } from "@/lib/env";
 
-
-config({ path: ".env" }); // or .env.local
 /**
- * Database client instance using Drizzle ORM with Vercel Postgres
+ * Database client instance using Drizzle ORM with Neon Serverless
  * This provides a type-safe interface to our database
+ * 
+ * When deployed to Cloudflare, Hyperdrive will automatically intercept
+ * and optimize database connections without any code changes
  */
-const sql = neon(process.env.DATABASE_URL!);
+const { DATABASE_URL } = getEnv();
+const sql = neon(DATABASE_URL);
 
-export const db = drizzle({ client: sql, schema });
+export const db = drizzle(sql, { schema });
 
 /**
  * Export schema for use in other parts of the application

@@ -3,14 +3,14 @@ import { auth } from '@/lib/auth';
 import OpenAI from 'openai';
 
 // Set runtime to edge for optimal performance
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 // Configure OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     // Verify authentication
     const session = await auth();
@@ -39,8 +39,15 @@ export async function POST(req: NextRequest) {
       stream: true,
     });
 
-    // Create a streaming response
-    return response;
+    // Return the stream directly as a Response
+    // OpenAI's stream is already compatible with Web ReadableStream
+    return new Response(response.toReadableStream(), {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(

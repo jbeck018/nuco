@@ -1,10 +1,11 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { apiTokens } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
-import { randomBytes } from "crypto";
+import { uuidv4, generateSecureToken } from "@/lib/utils/edge-crypto";
 
 /**
  * GET handler for retrieving user API tokens
@@ -65,8 +66,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Generate a secure random token
-    const tokenBytes = randomBytes(32);
-    const token = tokenBytes.toString("hex");
+    const token = await generateSecureToken(32);
 
     // Create the API token
     const [newToken] = await db

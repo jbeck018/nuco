@@ -1,22 +1,20 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { apiTokens } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
+import { IdParam } from "@/lib/shared-types";
 
 /**
  * DELETE handler for removing an API token
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: RouteParams
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Get the user session
     const session = await auth();

@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { auth, signIn, signOut } from '@/lib/auth';
 import { Integration, ExtendedSession, AuthenticationError, isAuthenticatedWithProvider } from './oauth2-base';
-import crypto from 'crypto';
+import { timingSafeEqual } from '@/lib/utils/edge-crypto';
 
 /**
  * Slack API configuration
@@ -432,18 +432,17 @@ export class SlackIntegration implements Integration {
   }
   
   /**
-   * Verify a request signature from Slack
-   * @param signature - The X-Slack-Signature header
-   * @param timestamp - The X-Slack-Request-Timestamp header
+   * Verify the signature of a Slack request
+   * @param signature - The signature from the request header
+   * @param timestamp - The timestamp from the request header
    * @param body - The request body
    * @returns True if the signature is valid
    */
-  verifySignature(signature: string, timestamp: string, body: string): boolean {
+  async verifySignature(signature: string, timestamp: string, body: string): Promise<boolean> {
     if (!this.config.signingSecret) {
       return false;
     }
     
-    const hmac = crypto.createHmac('sha256', this.config.signingSecret);
     const [version, hash] = signature.split('=');
     
     // Check if the timestamp is too old (>5 minutes)
@@ -452,13 +451,34 @@ export class SlackIntegration implements Integration {
       return false;
     }
     
-    const baseString = `${version}:${timestamp}:${body}`;
-    const computedHash = hmac.update(baseString).digest('hex');
-    
-    return crypto.timingSafeEqual(
-      Buffer.from(hash),
-      Buffer.from(computedHash)
-    );
+    try {
+      const baseString = `${version}:${timestamp}:${body}`;
+      // Create HMAC using Web Crypto API
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(this.config.signingSecret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      
+      const signatureBuffer = await crypto.subtle.sign(
+        'HMAC',
+        key,
+        encoder.encode(baseString)
+      );
+      
+      // Convert to hex
+      const computedHash = Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      return timingSafeEqual(hash, computedHash);
+    } catch (error) {
+      console.error('Error verifying Slack signature:', error);
+      return false;
+    }
   }
   
   /**

@@ -5,6 +5,9 @@
  * It fetches the conversation data and renders the chat interface.
  */
 
+export const runtime = 'edge';
+
+import { use } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ChatInterface } from '@/components/chat/chat-interface';
@@ -12,11 +15,9 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { conversations } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-
+import { IdParam } from '@/lib/shared-types';
 interface ChatPageProps {
-  params: {
-    id: string;
-  };
+  params: IdParam;
 }
 
 export const metadata: Metadata = {
@@ -24,7 +25,8 @@ export const metadata: Metadata = {
   description: 'Chat with AI assistant',
 };
 
-export default async function ChatPage({ params }: ChatPageProps) {
+export default async function ChatPage(props: ChatPageProps) {
+  const params = await props.params;
   const session = await auth();
   
   if (!session?.user) {

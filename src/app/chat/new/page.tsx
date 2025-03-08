@@ -4,12 +4,14 @@
  * This page creates a new chat conversation and redirects to it.
  */
 
+export const runtime = 'edge';
+
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { conversations } from '@/lib/db/schema';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '@/lib/utils/edge-crypto';
 
 export const metadata: Metadata = {
   title: 'New Chat',

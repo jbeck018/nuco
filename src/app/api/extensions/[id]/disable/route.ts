@@ -1,14 +1,18 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createExtensionService } from '@/lib/extensions/service';
+import { IdParam } from '@/lib/shared-types';
 
 /**
  * POST handler for disabling an extension
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Check authentication
     const session = await auth();

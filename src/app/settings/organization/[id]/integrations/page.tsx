@@ -9,6 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useUserIntegrations } from "@/hooks/useDashboard";
 
+export const runtime = 'edge';
+
 export default function OrganizationIntegrationsSettingsPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();

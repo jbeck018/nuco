@@ -6,6 +6,8 @@ import { OrganizationSettings } from "@/components/organizations/OrganizationSet
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrganization } from "@/lib/organizations/context";
 
+export const runtime = 'edge';
+
 export default function OrganizationGeneralSettingsPage() {
   const params = useParams<{ id: string }>();
   const { currentOrganization, setCurrentOrganizationById, isLoading } = useOrganization();

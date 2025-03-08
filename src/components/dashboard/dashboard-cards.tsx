@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface IntegrationStats {
   total: number;
@@ -39,8 +41,21 @@ export function DashboardCards({
   recentChats,
   organizationDetails,
 }: DashboardCardsProps) {
+  // Handle potential error states
+  const hasError = !organizationDetails?.id || organizationDetails.id === 'org_default';
+
   return (
     <div className="space-y-8">
+      {hasError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            There was an error loading some dashboard data. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -119,11 +134,16 @@ export function DashboardCards({
             ) : (
               <div className="text-center py-4">
                 <p className="text-muted-foreground">No recent chats found</p>
+                <Button asChild variant="link" className="mt-2">
+                  <Link href="/chat">Start a new conversation</Link>
+                </Button>
               </div>
             )}
-            <Button asChild variant="outline" className="w-full mt-2">
-              <Link href="/chat">View All Chats</Link>
-            </Button>
+            {recentChats.length > 0 && (
+              <Button asChild variant="outline" className="w-full mt-2">
+                <Link href="/chat">View All Chats</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
         

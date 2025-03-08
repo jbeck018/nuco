@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -7,20 +9,15 @@ import {
   promptTemplateSchema,
 } from "@/lib/ai/templates";
 import { z } from "zod";
-
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
+import { IdParam } from "@/lib/shared-types";
 /**
  * GET handler for retrieving a prompt template by ID
  */
 export async function GET(
   request: NextRequest,
-  { params }: RouteParams
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Get the user session
     const session = await auth();
@@ -66,8 +63,9 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: RouteParams
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+    const params = await data.params;
   try {
     // Get the user session
     const session = await auth();
@@ -133,8 +131,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: RouteParams
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Get the user session
     const session = await auth();

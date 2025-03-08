@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createSlackIntegration, SlackIntegration } from '@/lib/integrations/slack';
 import { db } from '@/lib/db';

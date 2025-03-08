@@ -1,0 +1,6 @@
+[hyperdrive]
+name = "nuco-hyperdrive"
+connection_string = "${DATABASE_URL}"
+cache_all_queries = false
+max_cache_age = 60
+max_connections = 10 

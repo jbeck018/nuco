@@ -1,6 +1,9 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createExtensionService } from '@/lib/extensions/service';
+import { IdParam } from '@/lib/shared-types';
 
 /**
  * GET handler for extension settings
@@ -8,8 +11,9 @@ import { createExtensionService } from '@/lib/extensions/service';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Check authentication
     const session = await auth();
@@ -65,8 +69,9 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  data: { params: IdParam }
 ): Promise<NextResponse> {
+  const params = await data.params;
   try {
     // Check authentication
     const session = await auth();

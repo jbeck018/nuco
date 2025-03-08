@@ -4,6 +4,8 @@
  * This page demonstrates the use of OpenAI function calling.
  */
 
+export const runtime = 'edge';
+
 import { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';

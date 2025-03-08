@@ -7,7 +7,7 @@
 import { db } from '@/lib/db';
 import { organizations, organizationMembers, users, organizationRoleEnum } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '@/lib/utils/edge-crypto';
 import { slugify } from '@/lib/utils';
 
 /**

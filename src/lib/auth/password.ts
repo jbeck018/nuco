@@ -1,8 +1,4 @@
-import { randomBytes, scrypt, timingSafeEqual } from "crypto";
-import { promisify } from "util";
-
-// Convert scrypt to a promise-based function
-const scryptAsync = promisify(scrypt);
+import { pbkdf2, randomBytesHex, timingSafeEqual } from "@/lib/utils/edge-crypto";
 
 /**
  * Hash a password with a random salt
@@ -11,13 +7,13 @@ const scryptAsync = promisify(scrypt);
  */
 export async function hashPassword(password: string): Promise<string> {
   // Generate a random salt
-  const salt = randomBytes(16).toString("hex");
+  const salt = await randomBytesHex(16);
   
-  // Hash the password with the salt
-  const hash = await scryptAsync(password, salt, 64) as Buffer;
+  // Hash the password with the salt using PBKDF2
+  const hash = await pbkdf2(password, salt);
   
   // Return the salt and hash combined
-  return `${salt}:${hash.toString("hex")}`;
+  return `${salt}:${hash}`;
 }
 
 /**
@@ -39,11 +35,8 @@ export async function verifyPassword(
   }
   
   // Hash the provided password with the same salt
-  const hash = (await scryptAsync(password, salt, 64)) as Buffer;
-  
-  // Convert the stored hash to a buffer for comparison
-  const storedHashBuffer = Buffer.from(storedHash, "hex");
+  const hash = await pbkdf2(password, salt);
   
   // Compare the hashes using a timing-safe comparison
-  return timingSafeEqual(hash, storedHashBuffer);
+  return timingSafeEqual(hash, storedHash);
 } 

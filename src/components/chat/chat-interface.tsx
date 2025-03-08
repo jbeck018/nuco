@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '@/lib/utils/edge-crypto';
 import { useToast } from '@/components/ui/use-toast';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
