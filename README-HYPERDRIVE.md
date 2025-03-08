@@ -70,6 +70,20 @@ You can run this script manually with:
 bun run hyperdrive:setup
 ```
 
+## Wrangler Authentication
+
+Hyperdrive requires specific permissions in your Cloudflare account. If you encounter permission errors, you may need to re-authenticate:
+
+```bash
+# Logout from current session
+npx wrangler logout
+
+# Login again and authorize all permissions
+npx wrangler login
+```
+
+When logging in, make sure to authorize all requested permissions, including Hyperdrive access.
+
 ## Monitoring
 
 You can monitor your Hyperdrive instance in the Cloudflare dashboard:
@@ -90,5 +104,6 @@ If you encounter issues with Hyperdrive:
 2. Verify that your DATABASE_URL environment variable is correct
 3. Check the Cloudflare logs for any errors
 4. If you need to configure additional options like caching settings, you'll need to do this through the Cloudflare dashboard
+5. If you see permission errors, try re-authenticating with Wrangler as described in the "Wrangler Authentication" section
 
 For more information, see the [Cloudflare Hyperdrive documentation](https://developers.cloudflare.com/hyperdrive/). 

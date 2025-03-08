@@ -27,12 +27,22 @@ console.log('🚀 Setting up Cloudflare Hyperdrive...');
 
 // Check if Hyperdrive instance exists and create/update as needed
 try {
+  // First, check if we have the necessary permissions
+  console.log('🔑 Checking Cloudflare authentication...');
+  try {
+    execSync('npx wrangler whoami', { stdio: 'inherit' });
+  } catch (authError) {
+    console.error('❌ Authentication error. Please login with Wrangler:');
+    console.error('   Run: npx wrangler login');
+    process.exit(1);
+  }
+
   console.log('📋 Checking if Hyperdrive instance exists...');
   
   // First, try to get the list of existing Hyperdrive instances
   let existingId = null;
   try {
-    const listOutput = execSync('wrangler hyperdrive list').toString();
+    const listOutput = execSync('npx wrangler hyperdrive list').toString();
     console.log('📋 Current Hyperdrive instances:');
     console.log(listOutput);
     
@@ -52,6 +62,15 @@ try {
       }
     }
   } catch (listError) {
+    // If we get a permission error, suggest re-login
+    if (listError.message && listError.message.includes('permission')) {
+      console.error('❌ Permission error. Your Wrangler token may not have Hyperdrive permissions.');
+      console.error('   Please re-login with Wrangler:');
+      console.error('   1. Run: npx wrangler logout');
+      console.error('   2. Run: npx wrangler login');
+      console.error('   3. Make sure to authorize all requested permissions');
+      process.exit(1);
+    }
     console.log('⚠️ Could not list existing Hyperdrive instances:', listError.message);
   }
   
@@ -59,11 +78,21 @@ try {
     // Update the existing Hyperdrive instance
     console.log(`📝 Updating Hyperdrive configuration for ID: ${existingId}...`);
     try {
-      execSync(`wrangler hyperdrive update ${existingId} --connection-string="${DATABASE_URL}"`, { 
+      execSync(`npx wrangler hyperdrive update ${existingId} --connection-string="${DATABASE_URL}"`, { 
         stdio: 'inherit' 
       });
       console.log('✅ Hyperdrive configuration updated successfully');
     } catch (updateError) {
+      // Check for permission errors
+      if (updateError.message && updateError.message.includes('permission')) {
+        console.error('❌ Permission error. Your Wrangler token may not have Hyperdrive permissions.');
+        console.error('   Please re-login with Wrangler:');
+        console.error('   1. Run: npx wrangler logout');
+        console.error('   2. Run: npx wrangler login');
+        console.error('   3. Make sure to authorize all requested permissions');
+        process.exit(1);
+      }
+      
       console.error('⚠️ Error updating Hyperdrive:', updateError.message);
       console.log('🔄 Trying to create a new instance instead...');
       existingId = null; // Reset so we try to create a new instance
@@ -74,11 +103,21 @@ try {
     // Try to create a new Hyperdrive instance
     try {
       console.log(`🆕 Creating new Hyperdrive instance '${HYPERDRIVE_NAME}'...`);
-      execSync(`wrangler hyperdrive create ${HYPERDRIVE_NAME} --connection-string="${DATABASE_URL}"`, { 
+      execSync(`npx wrangler hyperdrive create ${HYPERDRIVE_NAME} --connection-string="${DATABASE_URL}"`, { 
         stdio: 'inherit'
       });
       console.log('✅ Hyperdrive instance created successfully');
     } catch (createError) {
+      // Check for permission errors
+      if (createError.message && createError.message.includes('permission')) {
+        console.error('❌ Permission error. Your Wrangler token may not have Hyperdrive permissions.');
+        console.error('   Please re-login with Wrangler:');
+        console.error('   1. Run: npx wrangler logout');
+        console.error('   2. Run: npx wrangler login');
+        console.error('   3. Make sure to authorize all requested permissions');
+        process.exit(1);
+      }
+      
       console.error('❌ Error creating Hyperdrive instance:', createError.message);
       throw createError;
     }
