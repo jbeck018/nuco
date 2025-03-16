@@ -18,14 +18,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ModelConfig, openAIModels, anthropicModels } from '@/lib/ai/config';
 
-// Available AI models
-const AI_MODELS = [
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', default: true },
-  { id: 'gpt-4', name: 'GPT-4', default: false },
-  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', default: false },
-  { id: 'claude-2', name: 'Claude 2', default: false },
-];
+// Ensure the model arrays are defined with fallbacks
+const safeOpenAIModels = openAIModels || [];
+const safeAnthropicModels = anthropicModels || [];
+
 
 export function AiSettingsForm() {
   // Get AI preferences from the hook
@@ -115,7 +113,7 @@ export function AiSettingsForm() {
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
-                {AI_MODELS.map(model => (
+                {[...safeOpenAIModels, ...safeAnthropicModels].map(model => (
                   <SelectItem key={model.id} value={model.id}>
                     {model.name}
                   </SelectItem>

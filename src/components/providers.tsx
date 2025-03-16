@@ -8,6 +8,7 @@ import { TRPCProvider } from "@/lib/trpc/trpc";
 import { OrganizationProvider } from "@/lib/organizations/context";
 import { TRPCClient } from '@trpc/client';
 import { AppRouter } from "@/lib/trpc/router";
+import { AuthErrorBoundary } from "@/components/error/auth-error-boundary";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -33,7 +34,9 @@ export function Providers({
         <QueryClientProvider client={queryClient}>
           <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
             <OrganizationProvider initialOrganizationSlug={initialOrganizationSlug}>
-              {children}
+              <AuthErrorBoundary>
+                {children}
+              </AuthErrorBoundary>
             </OrganizationProvider>
           </TRPCProvider>
         </QueryClientProvider>

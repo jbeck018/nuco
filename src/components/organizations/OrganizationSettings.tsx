@@ -36,8 +36,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
+import { ModelSelector } from '@/components/ai/ModelSelector';
+import { AiSettings } from '@/lib/db/types/metadata-types';
 
 const formSchema = z.object({
   name: z.string().min(1, "Organization name is required").max(100),
@@ -52,8 +54,17 @@ export function OrganizationSettings() {
   const { currentOrganization, refreshOrganizations } = useOrganization();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isUpdatingAiSettings, setIsUpdatingAiSettings] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  // Fetch organization settings
+  const { data: orgSettings, isLoading: isLoadingSettings } = useQuery({
+    ...trpc.metadata.getOrganizationSettings.queryOptions({ 
+      organizationId: currentOrganization?.id || '' 
+    }),
+    enabled: !!currentOrganization?.id
+  });
 
   const updateMutation = useMutation(trpc.organization.update.mutationOptions({
     onMutate: async (data) => {
@@ -133,6 +144,36 @@ export function OrganizationSettings() {
       await queryClient.invalidateQueries(trpc.organization.getById.queryFilter({ id: variables.id }));
       await queryClient.invalidateQueries(trpc.organization.getAll.pathFilter());
       await refreshOrganizations();
+    }
+  }));
+
+  // Add mutation for updating organization AI settings
+  const updateOrgSettingsMutation = useMutation(trpc.metadata.updateOrganizationSettings.mutationOptions({
+    onMutate: async () => {
+      setIsUpdatingAiSettings(true);
+      if (currentOrganization?.id) {
+        await queryClient.cancelQueries(trpc.metadata.getOrganizationSettings.queryFilter({ organizationId: currentOrganization.id }));
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Organization AI settings updated",
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update organization AI settings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update organization AI settings",
+        variant: "destructive",
+      });
+    },
+    onSettled: async () => {
+      setIsUpdatingAiSettings(false);
+      if (currentOrganization?.id) {
+        await queryClient.invalidateQueries(trpc.metadata.getOrganizationSettings.queryFilter({ organizationId: currentOrganization.id }));
+      }
     }
   }));
 
@@ -250,6 +291,33 @@ export function OrganizationSettings() {
     deleteMutation.mutate({ id: currentOrganization.id });
   };
 
+  // Handle model selection for organization
+  const handleModelChange = async (modelId: string) => {
+    if (!currentOrganization?.id) return;
+    
+    // Create default AI settings if they don't exist
+    const defaultAiSettings: AiSettings = {
+      defaultModel: modelId,
+      maxTokensPerRequest: 2000,
+      promptTemplates: [],
+      contextSettings: {
+        includeUserHistory: true,
+        includeOrganizationData: true,
+        contextWindowSize: 10,
+      }
+    };
+    
+    // Use existing settings if available
+    const aiSettings = orgSettings?.aiSettings 
+      ? { ...orgSettings.aiSettings, defaultModel: modelId }
+      : defaultAiSettings;
+    
+    updateOrgSettingsMutation.mutate({
+      organizationId: currentOrganization.id,
+      aiSettings
+    });
+  };
+
   if (!currentOrganization) {
     return (
       <Card>
@@ -262,17 +330,17 @@ export function OrganizationSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization Settings</CardTitle>
-          <CardDescription>
-            Manage your organization&apos;s profile and settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <div className="space-y-6 h-full overflow-y-auto overflow-x-auto">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Organization Settings</CardTitle>
+              <CardDescription>
+                Manage your organization&apos;s basic information.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="name"
@@ -280,7 +348,7 @@ export function OrganizationSettings() {
                   <FormItem>
                     <FormLabel>Organization Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Acme Inc." {...field} />
+                      <Input placeholder="Enter organization name" {...field} />
                     </FormControl>
                     <FormDescription>
                       This is your organization&apos;s display name.
@@ -289,7 +357,7 @@ export function OrganizationSettings() {
                   </FormItem>
                 )}
               />
-
+              
               <FormField
                 control={form.control}
                 name="website"
@@ -306,7 +374,7 @@ export function OrganizationSettings() {
                   </FormItem>
                 )}
               />
-
+              
               <FormField
                 control={form.control}
                 name="billingEmail"
@@ -323,15 +391,52 @@ export function OrganizationSettings() {
                   </FormItem>
                 )}
               />
-
-              <Button type="submit" disabled={isSubmitting || updateMutation.isPending}>
-                {isSubmitting || updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
-            </form>
-          </Form>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
+      
+      {/* AI Model Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Model Settings</CardTitle>
+          <CardDescription>
+            Configure the default AI model for your organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Default AI Model</h3>
+            <p className="text-sm text-muted-foreground">
+              Select the default AI model to use for all chats in your organization.
+              Users can override this setting in individual chats.
+            </p>
+            <div className="pt-2">
+              <div className="w-full max-w-[300px]">
+                {isLoadingSettings ? (
+                  <div className="h-10 w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm">Loading...</div>
+                ) : (
+                  <ModelSelector 
+                    isOrganizationSetting={true} 
+                    initialModelId={orgSettings?.aiSettings?.defaultModel}
+                    onModelChange={handleModelChange}
+                    disabled={isUpdatingAiSettings}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
+      
       <Card className="border-destructive/50">
         <CardHeader>
           <CardTitle className="text-destructive">Danger Zone</CardTitle>

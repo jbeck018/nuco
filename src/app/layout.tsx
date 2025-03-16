@@ -103,8 +103,8 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} overflow-hidden`}>
+    <html lang="en" suppressHydrationWarning className="h-full">
+      <body className={`${inter.className} h-full`}>
         <Providers 
           queryClient={queryClient} 
           trpcClient={trpcClient} 
@@ -113,7 +113,7 @@ export default function RootLayout({
           <MainNav>
             {!isDashboardRoute && (
               <div className="flex min-h-screen flex-col">
-                <main className="flex-1">{children}</main>
+                <main className="flex-1 overflow-auto">{children}</main>
                 <footer className="border-t py-6">
                   <div className="container mx-auto px-4">
                     <div className="flex flex-col items-center justify-between gap-4 md:flex-row">

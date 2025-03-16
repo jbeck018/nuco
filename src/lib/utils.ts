@@ -1,7 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { format, formatDistanceToNow } from "date-fns"
-import { StreamTextResult, ToolSet } from 'ai'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -23,19 +22,30 @@ export function formatDateRelative(date: Date) {
 }
 
 /**
- * Process a StreamTextResult from the AI SDK and convert it to a string by calling a callback for each chunk
- * @param stream - The StreamTextResult to process
- * @param onChunk - Callback function that receives each chunk as it's processed
- * @returns A promise that resolves when the stream is fully processed
+ * Format a number with commas as thousands separators
+ * @param num - The number to format
+ * @returns The formatted number string
  */
-export async function streamToString<T extends ToolSet = ToolSet>(
-  stream: StreamTextResult<T, unknown>,
+export function formatNumber(num: number): string {
+  return new Intl.NumberFormat().format(num);
+}
+
+/**
+ * Process a stream and convert it to a string by calling a callback for each chunk
+ * @param stream - The AsyncIterable stream to process
+ * @param onChunk - Callback function that receives each chunk as it's processed
+ * @returns A promise that resolves to the full string when the stream is fully processed
+ */
+export async function streamToString(
+  stream: AsyncIterable<string>,
   onChunk: (chunk: string) => void
-): Promise<void> {
-  // The textStream is an AsyncIterable that yields text chunks
-  for await (const chunk of stream.textStream) {
+): Promise<string> {
+  let result = '';
+  for await (const chunk of stream) {
+    result += chunk;
     onChunk(chunk);
   }
+  return result;
 }
 
 /**

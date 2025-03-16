@@ -13,6 +13,8 @@ import { db } from "@/lib/db";
 import { organizationMembers, users, organizations } from "@/lib/db/schema";
 import * as stripeService from "@/lib/stripe/service";
 import { getBaseUrl } from "@/lib/utils";
+import { handleOrganizationError } from "@/lib/organizations/error-handler";
+import { OrganizationAuthError } from "@/lib/auth/error-handler";
 
 // Input validation schemas
 const createOrganizationSchema = z.object({
@@ -134,10 +136,7 @@ export const organizationRouter = router({
         const organization = await organizationService.getOrganizationById(input.id);
         
         if (!organization) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
+          throw new OrganizationAuthError(`Organization not found: ${input.id}`, input.id);
         }
         
         // Check if the user is a member of this organization
@@ -147,21 +146,13 @@ export const organizationRouter = router({
         });
         
         if (!isMember) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You don't have access to this organization",
-          });
+          throw new OrganizationAuthError(`You don't have access to this organization: ${input.id}`, input.id);
         }
         
         return organization;
       } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get organization",
-          cause: error,
-        });
+        // Use our new error handler
+        throw handleOrganizationError(error, input.id);
       }
     }),
 
@@ -173,10 +164,7 @@ export const organizationRouter = router({
         const organization = await organizationService.getOrganizationBySlug(input.slug);
         
         if (!organization) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
+          throw new OrganizationAuthError(`Organization not found with slug: ${input.slug}`);
         }
         
         // Check if the user is a member of this organization
@@ -186,21 +174,13 @@ export const organizationRouter = router({
         });
         
         if (!isMember) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You don't have access to this organization",
-          });
+          throw new OrganizationAuthError(`You don't have access to this organization: ${organization.id}`, organization.id);
         }
         
         return organization;
       } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get organization",
-          cause: error,
-        });
+        // Use our new error handler
+        throw handleOrganizationError(error);
       }
     }),
 
@@ -710,5 +690,66 @@ export const organizationRouter = router({
       });
       
       return { url: session.url };
+    }),
+
+  // Reset default organization
+  resetDefaultOrganization: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      try {
+        const userId = ctx.session.user.id;
+        
+        // Get user's organizations
+        const userOrgs = await organizationService.getUserOrganizations(userId);
+        
+        // If user has no organizations, create a new one
+        if (userOrgs.length === 0) {
+          const user = await db.query.users.findFirst({
+            where: eq(users.id, userId),
+          });
+          
+          if (!user) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "User not found",
+            });
+          }
+          
+          const orgName = `${user.name || 'User'}'s Organization`;
+          
+          const org = await organizationService.createOrganization({
+            name: orgName,
+            userId: userId,
+            billingEmail: user.email,
+          });
+          
+          if (org) {
+            // Set as default organization
+            await db.update(users)
+              .set({ defaultOrganizationId: org.id })
+              .where(eq(users.id, userId));
+              
+            return { success: true, organizationId: org.id };
+          }
+        } else {
+          // Set the first organization as default
+          await db.update(users)
+            .set({ defaultOrganizationId: userOrgs[0].id })
+            .where(eq(users.id, userId));
+            
+          return { success: true, organizationId: userOrgs[0].id };
+        }
+        
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to reset organization",
+        });
+      } catch (error) {
+        console.error("Error resetting default organization:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to reset organization",
+          cause: error,
+        });
+      }
     }),
 }); 

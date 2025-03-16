@@ -3,9 +3,9 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { createSlackIntegration, SlackIntegration } from '@/lib/integrations/slack';
 import { db } from '@/lib/db';
-import { getMessageReactions } from '@/lib/ai/sentiment';
 import { createThreadManager } from '@/lib/slack/thread-manager';
 import { createSlackAnalyticsService } from '@/lib/slack/analytics-service';
+import { analyzeClientSentiment } from '@/lib/ai/client-sentiment';
 
 // Create analytics service
 const analyticsService = createSlackAnalyticsService();
@@ -710,4 +710,40 @@ async function processBlockActions(
     response_type: 'ephemeral',
     text: 'Action not supported.',
   });
+}
+
+/**
+ * Get appropriate emoji reactions for a message
+ * Uses a combination of rule-based and AI approaches based on message complexity
+ */
+async function getMessageReactions(
+  text: string, 
+  options: {
+    useAI?: boolean;
+    maxEmojis?: number;
+    technicalContext?: boolean;
+    platform?: string;
+    topic?: string;
+    modelId?: string;
+  } = {}
+): Promise<string[]> {
+  // For very short messages, use simple analysis
+  if (text.length < 20 || !options.useAI) {
+    // Use the simple sentiment analysis from the sentiment module
+    const { analyzeTextSentimentSimple } = await import('@/lib/ai/sentiment');
+    const result = analyzeTextSentimentSimple(text);
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
+  }
+  
+  // For longer or more complex messages, use AI via client service
+  try {
+    const result = await analyzeClientSentiment(text, options);
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
+  } catch (error) {
+    console.error('Error getting message reactions:', error);
+    // Fall back to simple analysis in case of error
+    const { analyzeTextSentimentSimple } = await import('@/lib/ai/sentiment');
+    const result = analyzeTextSentimentSimple(text);
+    return result.suggestedEmojis.slice(0, options.maxEmojis || 3);
+  }
 } 

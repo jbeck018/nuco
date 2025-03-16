@@ -14,9 +14,8 @@ import { db } from '@/lib/db';
 import { conversations, messages } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { MessageSquareIcon, PlusIcon } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { ChatList } from '@/components/chat/chat-list';
 
 export const metadata: Metadata = {
   title: 'Chat',
@@ -69,28 +68,7 @@ export default async function ChatHomePage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {userConversations.map((conversation) => (
-            <Card key={conversation.id} className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle className="truncate">{conversation.title}</CardTitle>
-                <CardDescription>
-                  {formatDistanceToNow(new Date(conversation.updatedAt), { addSuffix: true })}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 pb-2">
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {conversation.messages[0]?.content || 'No messages yet'}
-                </p>
-              </CardContent>
-              <CardFooter>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href={`/chat/${conversation.id}`}>Continue Chat</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+        <ChatList conversations={userConversations} />
       )}
     </div>
   );

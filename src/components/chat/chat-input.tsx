@@ -38,8 +38,9 @@ export function ChatInput({
   }, [message]);
 
   const handleSend = () => {
-    if (message.trim() && !isDisabled) {
-      onSend(message.trim());
+    const trimmedMessage = message.trim();
+    if (trimmedMessage && trimmedMessage.length > 0 && !isDisabled) {
+      onSend(trimmedMessage);
       setMessage('');
       
       // Reset textarea height

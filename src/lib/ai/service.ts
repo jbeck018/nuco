@@ -5,8 +5,16 @@
  * It handles provider selection, message formatting, and response processing.
  */
 import { StreamTextResult, ToolSet } from 'ai';
-import { AIProvider, ModelConfig, getModelById, DEFAULT_MODEL_ID } from './config';
+import { AIProvider, ModelConfig, getModelById } from './config';
 import { generateOpenAIStream, OpenAIFunction, OpenAIError, OpenAIErrorType } from './providers/openai';
+import { generateClaudeStream } from './providers/claude';
+import { db } from '@/lib/db';
+import { sql, eq, and, gte, lte } from 'drizzle-orm';
+import { getOrganizationSettings } from '@/lib/metadata/service';
+import { organizationSettings } from '@/lib/db/schema/organization-settings';
+import { AIServiceError } from './error';
+import { formatMessages } from './utils';
+import { estimateTokenCount } from './tokenizer';
 
 /**
  * Message type for AI conversations
@@ -30,24 +38,15 @@ export interface CompletionOptions {
   presencePenalty?: number;
   maxTokens?: number;
   functions?: OpenAIFunction[];
-}
-
-/**
- * Generic AI Error class 
- */
-export class AIServiceError extends Error {
-  provider: AIProvider;
-  status?: number;
-  retryAfter?: number;
-  type: string;
-
-  constructor(message: string, provider: AIProvider, type: string = 'unknown', status?: number) {
-    super(message);
-    this.name = 'AIServiceError';
-    this.provider = provider;
-    this.status = status;
-    this.type = type;
-  }
+  organizationId?: string;
+  userId?: string;
+  customTokens?: {
+    openai?: string;
+    anthropic?: string;
+    google?: string;
+    custom?: string;
+  };
+  useCustomTokens?: boolean;
 }
 
 /**
@@ -61,6 +60,39 @@ const MAX_RETRY_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 1000;
 
 /**
+ * Check if an organization has exceeded its token limit
+ * @param organizationId The organization ID to check
+ * @returns True if the organization has exceeded its token limit, false otherwise
+ */
+export async function hasExceededTokenLimit(organizationId: string): Promise<boolean> {
+  try {
+    // Get the organization settings
+    const settings = await getOrganizationSettings(organizationId);
+    
+    // If no settings or no AI settings with usage limit, assume not exceeded
+    if (!settings || !settings.aiSettings || !settings.aiSettings.usageLimit) {
+      return false;
+    }
+    
+    const { usageLimit } = settings.aiSettings;
+    
+    // If no monthly token limit is set, assume not exceeded
+    if (!usageLimit.monthlyTokenLimit) {
+      return false;
+    }
+    
+    // Check if the current usage exceeds the monthly limit
+    // Use currentMonthUsage if available, otherwise default to 0
+    const currentUsage = usageLimit.currentMonthUsage || 0;
+    return currentUsage >= usageLimit.monthlyTokenLimit;
+  } catch (error) {
+    console.error('Error checking token limit:', error);
+    // In case of error, default to not exceeded to prevent blocking legitimate requests
+    return false;
+  }
+}
+
+/**
  * Generate a streaming completion from the AI service with retry logic
  * @param messages The messages to send to the API
  * @param options The options for the completion
@@ -68,16 +100,29 @@ const BASE_BACKOFF_MS = 1000;
  * @returns A streaming response from the API
  */
 export async function generateCompletion(
-  messages: Omit<Message, 'id' | 'createdAt'>[],
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: CompletionOptions = {},
   retryCount = 0
 ): Promise<StreamTextResult<ToolSet, never>> {
   // Get the model configuration
-  const modelId = options.modelId || DEFAULT_MODEL_ID;
+  const modelId = options.modelId;
   const modelConfig = getModelById(modelId);
   
   if (!modelConfig) {
     throw new AIServiceError(`Model ${modelId} not found`, 'custom', 'invalid_model');
+  }
+  
+  // Check token limits if organization ID is available and not using custom tokens
+  if (options.organizationId && !options.useCustomTokens) {
+    const hasExceeded = await hasExceededTokenLimit(options.organizationId);
+    
+    if (hasExceeded) {
+      throw new AIServiceError(
+        'Token limit exceeded. Your organization has reached its monthly token usage limit. Please purchase more tokens or add a custom API key.',
+        modelConfig.provider,
+        'token_limit_exceeded'
+      );
+    }
   }
   
   // Apply custom options to the model configuration
@@ -93,14 +138,37 @@ export async function generateCompletion(
   // Format messages for the API
   const formattedMessages = formatMessages(messages, options.systemPrompt);
   
+  // Estimate input tokens
+  const estimatedInputTokens = await estimateTokenCount(
+    formattedMessages.map(m => m.content).join(' '), 
+    modelConfig.provider
+  );
+  
   try {
+    // Check if custom tokens should be used
+    const providerApiKey = options.useCustomTokens && options.customTokens 
+      ? options.customTokens[modelConfig.provider] 
+      : undefined;
+    
     // Generate the completion based on the provider
+    let result: StreamTextResult<ToolSet, never>;
+    
     switch (modelConfig.provider) {
       case 'openai':
-        return await generateOpenAIStream(formattedMessages, customizedConfig, options.functions);
+        result = await generateOpenAIStream(
+          formattedMessages, 
+          customizedConfig, 
+          options.functions,
+          providerApiKey
+        );
+        break;
       case 'anthropic':
-        // TODO: Implement Anthropic provider
-        throw new AIServiceError('Anthropic provider not implemented yet', 'anthropic', 'not_implemented');
+        result = await generateClaudeStream(
+          formattedMessages, 
+          customizedConfig,
+          providerApiKey
+        );
+        break;
       case 'google':
         // TODO: Implement Google provider
         throw new AIServiceError('Google provider not implemented yet', 'google', 'not_implemented');
@@ -110,6 +178,20 @@ export async function generateCompletion(
       default:
         throw new AIServiceError(`Unsupported provider: ${modelConfig.provider}`, 'custom', 'invalid_provider');
     }
+    
+    // Track token usage if organization ID is provided and not using custom tokens
+    if (options.organizationId && !options.useCustomTokens) {
+      // We'll update the token usage asynchronously to avoid blocking the response
+      // Estimate output tokens (this is approximate)
+      const estimatedOutputTokens = Math.ceil((customizedConfig.maxOutputTokens || 2000) * 0.7); // Assume 70% usage
+      const totalTokens = estimatedInputTokens + estimatedOutputTokens;
+      
+      // Update token usage in the background
+      updateTokenUsage(options.organizationId, totalTokens)
+        .catch(error => console.error('Error updating token usage:', error));
+    }
+    
+    return result;
   } catch (error) {
     // Handle provider-specific errors
     if (error instanceof OpenAIError) {
@@ -161,54 +243,13 @@ function calculateExponentialBackoff(retryCount: number): number {
 }
 
 /**
- * Format messages for the API
- * @param messages The messages to format
- * @param systemPrompt An optional system prompt to prepend
- * @returns Formatted messages for the API
- */
-function formatMessages(
-  messages: Omit<Message, 'id' | 'createdAt'>[],
-  systemPrompt?: string
-): { role: 'system' | 'user' | 'assistant'; content: string }[] {
-  const formattedMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
-  
-  // Add system prompt if provided
-  if (systemPrompt) {
-    formattedMessages.push({
-      role: 'system',
-      content: systemPrompt,
-    });
-  }
-  
-  // Add the rest of the messages
-  formattedMessages.push(...messages);
-  
-  return formattedMessages;
-}
-
-/**
  * Count the number of tokens in a string
  * @param text The text to count tokens for
  * @param provider The provider to use for counting
  * @returns The number of tokens in the text
  */
 export async function countTokens(text: string, provider: AIProvider = 'openai'): Promise<number> {
-  switch (provider) {
-    case 'openai':
-      // Simple approximation (1 token ≈ 4 characters)
-      return Math.ceil(text.length / 4);
-    case 'anthropic':
-      // Fallback to a simple approximation (1 token ≈ 4 characters)
-      return Math.ceil(text.length / 4);
-    case 'google':
-      // Fallback to a simple approximation (1 token ≈ 4 characters)
-      return Math.ceil(text.length / 4);
-    case 'custom':
-      // Fallback to a simple approximation (1 token ≈ 4 characters)
-      return Math.ceil(text.length / 4);
-    default:
-      throw new Error(`Unsupported provider: ${provider}`);
-  }
+  return estimateTokenCount(text, provider);
 }
 
 /**
@@ -233,5 +274,56 @@ export async function generateEmbeddings(text: string, provider: AIProvider = 'o
       throw new Error('Custom embeddings not implemented yet');
     default:
       throw new Error(`Unsupported provider: ${provider}`);
+  }
+}
+
+/**
+ * Update token usage for an organization
+ * @param organizationId The organization ID to update
+ * @param tokenCount The number of tokens to add to the usage
+ * @returns True if the update was successful, false otherwise
+ */
+export async function updateTokenUsage(organizationId: string, tokenCount: number): Promise<boolean> {
+  try {
+    // Get the organization settings
+    const settings = await getOrganizationSettings(organizationId);
+    
+    // If no settings or no AI settings, create them
+    if (!settings || !settings.aiSettings) {
+      return false;
+    }
+    
+    // Get the current AI settings
+    const aiSettings = settings.aiSettings;
+    
+    // Create or update the usage limit
+    const usageLimit = aiSettings.usageLimit || {
+      monthlyTokenLimit: 1000000, // Default to 1M tokens
+      currentMonthUsage: 0,
+      resetDate: new Date().toISOString(),
+    };
+    
+    // Update the current month usage
+    const currentUsage = usageLimit.currentMonthUsage || 0;
+    const newUsage = currentUsage + tokenCount;
+    
+    // Update the settings
+    await db.update(organizationSettings)
+      .set({
+        aiSettings: {
+          ...aiSettings,
+          usageLimit: {
+            ...usageLimit,
+            currentMonthUsage: newUsage,
+          },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(organizationSettings.organizationId, organizationId));
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating token usage:', error);
+    return false;
   }
 } 

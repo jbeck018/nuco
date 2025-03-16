@@ -80,8 +80,6 @@ export async function middleware(request: NextRequest) {
   const user = await getUserFromRequest(request);
   const pathname = request.nextUrl.pathname;
   
-  console.log(`Middleware processing: ${pathname}, User authenticated: ${!!user}`);
-  
   // Apply rate limiting
   const rateLimitResponse = await rateLimit(request);
   if (rateLimitResponse) {
@@ -120,11 +118,8 @@ export async function middleware(request: NextRequest) {
   // Check if the path is a landing route
   const isLandingRoute = matchesAnyRoute(pathname, landingRoutes);
   
-  console.log(`Path analysis: ${pathname}, Protected: ${isProtectedRoute}, Auth: ${isAuthRoute}, Public: ${isPublicRoute}, Landing: ${isLandingRoute}`);
-  
   // CASE 1: Unauthenticated user trying to access protected route -> redirect to login
   if (!user && isProtectedRoute) {
-    console.log(`Redirecting unauthenticated user from protected route ${pathname} to login`);
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(url);
@@ -132,13 +127,11 @@ export async function middleware(request: NextRequest) {
   
   // CASE 2: Authenticated user trying to access auth route -> redirect to dashboard
   if (user && isAuthRoute) {
-    console.log(`Redirecting authenticated user from auth route ${pathname} to dashboard`);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
   // CASE 3: Authenticated user trying to access landing route -> redirect to dashboard
   if (user && isLandingRoute) {
-    console.log(`Redirecting authenticated user from landing route ${pathname} to dashboard`);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
@@ -149,13 +142,11 @@ export async function middleware(request: NextRequest) {
     
     // If no organization slug is provided, redirect to the default organization
     if (!orgSlug && user.defaultOrganizationId) {
-      console.log(`Redirecting from empty org slug to dashboard`);
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
   
   // Continue with the request for all other cases
-  console.log(`Continuing with request for ${pathname}`);
   return response;
 }
 

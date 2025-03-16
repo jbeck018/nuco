@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
         break;
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.warn(`Unhandled event type: ${event.type}`);
     }
 
     return new NextResponse(JSON.stringify({ received: true }), {
@@ -102,8 +102,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, organization.id));
-
-  console.log(`Updated subscription for organization ${organization.id} to ${status}`);
 }
 
 /**
@@ -134,8 +132,6 @@ async function handleSubscriptionDeletion(subscription: Stripe.Subscription) {
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, organization.id));
-
-  console.log(`Subscription cancelled for organization ${organization.id}`);
 }
 
 /**
@@ -188,7 +184,6 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       })
       .where(eq(organizations.id, organization.id));
 
-    console.log(`Payment failed for organization ${organization.id}`);
   }
 }
 

@@ -20,6 +20,7 @@ export interface UseAiPreferencesResult {
   isLoading: boolean;
   error: Error | null;
   updateDefaultModel: (modelId: string) => Promise<void>;
+  updateSelectedModel: (modelId: string) => Promise<void>;
   updateMaxTokens: (tokens: number) => Promise<void>;
   updateTemplatePreferences: (templateIds: Array<{ id: string; name: string; isDefault?: boolean }>) => Promise<void>;
   updateContextSettings: (settings: {
@@ -33,6 +34,7 @@ export interface UseAiPreferencesResult {
 // Default AI preferences
 const DEFAULT_AI_PREFERENCES: AiSettings = {
   defaultModel: 'gpt-3.5-turbo',
+  selectedModel: undefined, // Will fall back to defaultModel when undefined
   maxTokensPerRequest: 2000,
   promptTemplates: [],
   contextSettings: {
@@ -55,6 +57,9 @@ export function isValidAiSettings(obj: unknown): obj is AiSettings {
   if (typeof settings.defaultModel !== 'string') return false;
   if (typeof settings.maxTokensPerRequest !== 'number') return false;
   if (!Array.isArray(settings.promptTemplates)) return false;
+  
+  // Check optional fields
+  if (settings.selectedModel !== undefined && typeof settings.selectedModel !== 'string') return false;
   
   // Validate promptTemplates array items
   for (const template of settings.promptTemplates) {
@@ -93,8 +98,16 @@ export function useAiPreferences(): UseAiPreferencesResult {
     { 
       enabled: !!session?.user?.id,
       staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1, // Only retry once to avoid excessive retries on failure
     }
   ));
+
+  // Handle errors and set default preferences
+  useEffect(() => {
+    if (!isLoading && !data && !preferences) {
+      setPreferences(DEFAULT_AI_PREFERENCES);
+    }
+  }, [isLoading, data, preferences]);
 
   // Mutation for updating preferences
   const updatePreferencesMutation = useMutation(trpc.metadata.setUserFlexiblePreferences.mutationOptions({
@@ -140,6 +153,10 @@ export function useAiPreferences(): UseAiPreferencesResult {
           typedSettings.defaultModel = valueAsRecord.defaultModel;
         }
         
+        if (typeof valueAsRecord.selectedModel === 'string') {
+          typedSettings.selectedModel = valueAsRecord.selectedModel;
+        }
+        
         if (typeof valueAsRecord.maxTokensPerRequest === 'number') {
           typedSettings.maxTokensPerRequest = valueAsRecord.maxTokensPerRequest;
         }
@@ -179,14 +196,10 @@ export function useAiPreferences(): UseAiPreferencesResult {
         if (isValidAiSettings(typedSettings)) {
           setPreferences(typedSettings);
         } else {
-          console.error('Invalid AI settings format after parsing');
-          setError(new Error('Invalid AI settings format'));
           // Set to default preferences as a fallback
           setPreferences(DEFAULT_AI_PREFERENCES);
         }
       } catch (parseError) {
-        console.error('Error parsing AI settings:', parseError);
-        setError(new Error('Invalid AI settings format'));
         // Set to default preferences as a fallback
         setPreferences(DEFAULT_AI_PREFERENCES);
       }
@@ -223,6 +236,16 @@ export function useAiPreferences(): UseAiPreferencesResult {
     toast({
       title: 'Preferences Updated',
       description: 'Default AI model has been updated',
+    });
+  }, [updatePreferences, toast]);
+
+  // Update selected model for current chat
+  const updateSelectedModel = useCallback(async (modelId: string) => {
+    await updatePreferences({ selectedModel: modelId });
+    
+    toast({
+      title: 'Model Changed',
+      description: 'AI model for this chat has been updated',
     });
   }, [updatePreferences, toast]);
 
@@ -296,6 +319,7 @@ export function useAiPreferences(): UseAiPreferencesResult {
     isLoading,
     error,
     updateDefaultModel,
+    updateSelectedModel,
     updateMaxTokens,
     updateTemplatePreferences,
     updateContextSettings,
