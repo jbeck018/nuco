@@ -28,7 +28,7 @@ import { ModelSelector } from '@/components/ai/ModelSelector';
 import { useOrganizationSettings } from '@/hooks/useOrganizationSettings';
 import { useOrganization } from '@/lib/organizations/context';
 import { extractTokenUsage } from '@/lib/ai/utils';
-import { useChat } from '@ai-sdk/react';
+import { useCompletion } from '@ai-sdk/react';
 
 import { useMutation } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,17 +66,17 @@ export function ChatInterface({
   const { currentOrganization } = useOrganization();
   const { settings: orgSettings } = useOrganizationSettings(currentOrganization?.id || '');
 
-  // Use the AI SDK's useChat hook for handling chat messages
+  // Use the AI SDK's useCompletion hook for handling completions
   const { 
-    messages: aiMessages,
-    handleSubmit,
+    completion: streamingMessage,
+    complete,
     error,
-  } = useChat({
+  } = useCompletion({
     api: '/api/ai/completion',
     id: conversationId,
     body: {
       model: getSelectedModel(aiPreferences),
-      temperature: 0.7,
+      temperature: 0.3,
       maxTokens: getMaxTokens(aiPreferences),
       organizationId: currentOrganization?.id,
       useCustomTokens: orgSettings?.aiSettings?.useCustomTokens || false,
@@ -88,12 +88,12 @@ export function ChatInterface({
       setIsProcessing(true);
       setStreamError(null);
     },
-    onFinish: async (message) => {
+    onFinish: async (_prompt,completion) => {
       // This is called when the API response is complete
       setIsProcessing(false);
       
       // Extract token usage from the response metadata
-      const tokenUsage = extractTokenUsage(message.content);
+      const tokenUsage = extractTokenUsage(completion);
       
       // Update token usage if available and not using custom tokens
       if (tokenUsage && currentOrganization?.id && !orgSettings?.aiSettings?.useCustomTokens) {
@@ -108,7 +108,7 @@ export function ChatInterface({
       const assistantMessage: Message = {
         id: uuidv4(),
         role: 'assistant',
-        content: message.content,
+        content: completion,
         createdAt: new Date().toISOString(),
       };
       
@@ -122,13 +122,13 @@ export function ChatInterface({
       });
     },
     onError: (error) => {
-      console.error('Error in chat:', error);
+      console.error('Error in completion:', error);
       setStreamError('Failed to process AI response. Please try again.');
       setIsProcessing(false);
     }
   });
 
-  // Effect to handle errors from the useChat hook
+  // Effect to handle errors from the useCompletion hook
   useEffect(() => {
     if (error) {
       setStreamError(error.message || 'Failed to process AI response. Please try again.');
@@ -176,7 +176,7 @@ export function ChatInterface({
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, aiMessages]);
+  }, [messages, streamingMessage]);
 
   const handleSendMessage = async (content: string) => {
     if (isProcessing) return;
@@ -245,18 +245,22 @@ export function ChatInterface({
       // Use the last message from the enhanced prompt (which contains the context-aware user message)
       const contextAwareMessage = enhancedPrompt[enhancedPrompt.length - 1].content;
       
-      // Create a synthetic form event to use with handleSubmit
-      const formEvent = {
-        preventDefault: () => {},
-        currentTarget: {
-          elements: {
-            message: { value: contextAwareMessage }
-          }
+      // Use the AI SDK's complete function to send the message
+      await complete(contextAwareMessage, {
+        body: {
+          messages: enhancedPrompt.map(msg => ({
+            role: msg.role as 'user' | 'assistant' | 'system',
+            content: msg.content
+          })),
+          model: getSelectedModel(aiPreferences),
+          temperature: 0.7,
+          maxTokens: getMaxTokens(aiPreferences),
+          organizationId: currentOrganization?.id,
+          useCustomTokens: orgSettings?.aiSettings?.useCustomTokens || false,
+          customTokens: orgSettings?.aiSettings?.customTokens,
+          systemPrompt: 'You are a helpful AI assistant.'
         }
-      } as unknown as React.FormEvent<HTMLFormElement>;
-      
-      // Use the AI SDK's handleSubmit function to send the message
-      handleSubmit(formEvent);
+      });
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -275,11 +279,6 @@ export function ChatInterface({
       router.push('/chat/new');
     }
   };
-
-  // Get the current streaming message from the AI SDK
-  const currentAiMessage = aiMessages.length > 0 && aiMessages[aiMessages.length - 1].role === 'assistant' 
-    ? aiMessages[aiMessages.length - 1].content 
-    : '';
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -323,10 +322,10 @@ export function ChatInterface({
               />
             ))}
             
-            {currentAiMessage && isProcessing && (
+            {streamingMessage && isProcessing && (
               <ChatMessage
                 role="assistant"
-                content={currentAiMessage}
+                content={streamingMessage}
                 messageStatus="streaming"
               />
             )}
@@ -337,7 +336,7 @@ export function ChatInterface({
               </div>
             )}
             
-            {isProcessing && !currentAiMessage && !streamError && (
+            {isProcessing && !streamingMessage && !streamError && (
               <ChatMessage
                 role="assistant"
                 content=""
