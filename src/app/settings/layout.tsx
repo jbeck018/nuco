@@ -71,19 +71,19 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       description: "Manage team members",
     },
     {
+      title: "Token Management",
+      href: `/settings/organization/${selectedOrgId}/api-tokens`,
+      description: "Manage tokens and usage limits",
+    },
+    {
       title: "Billing",
       href: `/settings/organization/${selectedOrgId}/billing`,
       description: "Manage subscription and billing",
     },
-    // {
-    //   title: "Integrations",
-    //   href: `/settings/organization/${selectedOrgId}/integrations`,
-    //   description: "Manage connected services",
-    // },
   ] : [];
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto">
       <div className="flex flex-col gap-8 md:flex-row">
         <aside className="md:w-72">
           <div className="sticky top-8">

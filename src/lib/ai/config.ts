@@ -90,8 +90,8 @@ export const openAIModels: ModelConfig[] = [
  */
 export const anthropicModels: ModelConfig[] = [
   {
-    id: 'claude-3-opus',
-    name: 'Claude 3 Opus',
+    id: 'claude-3-5-haiku-latest',
+    name: 'Claude 3.5 Haiku',
     provider: 'anthropic',
     contextWindow: 200000,
     maxOutputTokens: 4096,
@@ -103,8 +103,8 @@ export const anthropicModels: ModelConfig[] = [
     costPer1kOutput: 0.075,
   },
   {
-    id: 'claude-3-sonnet',
-    name: 'Claude 3 Sonnet',
+    id: 'claude-3-7-sonnet-latest',
+    name: 'Claude 3.7 Sonnet',
     provider: 'anthropic',
     contextWindow: 200000,
     maxOutputTokens: 4096,
@@ -116,8 +116,8 @@ export const anthropicModels: ModelConfig[] = [
     costPer1kOutput: 0.015,
   },
   {
-    id: 'claude-3-haiku',
-    name: 'Claude 3 Haiku',
+    id: 'claude-3-opus-latest',
+    name: 'Claude 3 Opus',
     provider: 'anthropic',
     contextWindow: 200000,
     maxOutputTokens: 4096,
@@ -168,7 +168,7 @@ export const googleModels: ModelConfig[] = [
 export const availableModels: ModelConfig[] = [
   ...openAIModels,
   ...anthropicModels,
-  ...googleModels,
+  // ...googleModels,
 ];
 
 /**
@@ -176,8 +176,9 @@ export const availableModels: ModelConfig[] = [
  * @param modelId The model ID to find
  * @returns The model configuration or undefined if not found
  */
-export function getModelById(modelId: string): ModelConfig | undefined {
-  return availableModels.find(model => model.id === modelId);
+export function getModelById(modelId: string | undefined): ModelConfig {
+  const id = modelId || 'claude-3-7-sonnet-latest';
+  return availableModels.find(model => model.id === id) as ModelConfig;
 }
 
 /**
@@ -188,8 +189,3 @@ export function getModelById(modelId: string): ModelConfig | undefined {
 export function getModelsByProvider(provider: AIProvider): ModelConfig[] {
   return availableModels.filter(model => model.provider === provider);
 }
-
-/**
- * Default model ID to use if none is specified
- */
-export const DEFAULT_MODEL_ID = 'gpt-3.5-turbo'; 

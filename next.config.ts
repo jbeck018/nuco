@@ -131,8 +131,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-if (process.env.NODE_ENV === 'development') {
-  await setupDevPlatform();
-}
+// if (process.env.NODE_ENV === 'development') {
+//   setupDevPlatform();
+// }
 
 export default nextConfig;

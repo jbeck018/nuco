@@ -38,6 +38,7 @@ export interface SlackSettings {
  */
 export interface AiSettings {
   defaultModel: string;
+  selectedModel?: string;
   maxTokensPerRequest: number;
   promptTemplates: Array<{ id: string; name: string; isDefault?: boolean }>;
   contextSettings?: {
@@ -45,9 +46,18 @@ export interface AiSettings {
     includeOrganizationData: boolean;
     contextWindowSize: number;
   };
+  customTokens?: {
+    openai?: string;
+    anthropic?: string;
+    google?: string;
+  };
+  useCustomTokens?: boolean;
+  usageLimit?: {
+    monthlyTokenLimit: number;  // Total tokens allowed per month
+    currentMonthUsage?: number; // Current month's usage
+    resetDate?: string;         // Date when the usage resets
+  };
 }
-
-
 
 // Define specific types for integration settings
 export interface SyncSettings {
@@ -128,6 +138,7 @@ export const insertOrganizationSettingsSchema = z.object({
   }).optional().nullable(),
   aiSettings: z.object({
     defaultModel: z.string(),
+    selectedModel: z.string().optional(),
     maxTokensPerRequest: z.number(),
     promptTemplates: z.array(z.object({
       id: z.string(),
@@ -138,6 +149,17 @@ export const insertOrganizationSettingsSchema = z.object({
       includeUserHistory: z.boolean(),
       includeOrganizationData: z.boolean(),
       contextWindowSize: z.number(),
+    }).optional(),
+    customTokens: z.object({
+      openai: z.string().optional(),
+      anthropic: z.string().optional(),
+      google: z.string().optional(),
+    }).optional(),
+    useCustomTokens: z.boolean().optional(),
+    usageLimit: z.object({
+      monthlyTokenLimit: z.number(),
+      currentMonthUsage: z.number().optional(),
+      resetDate: z.string().optional(),
     }).optional(),
   }).optional().nullable(),
   createdAt: z.date().optional(),

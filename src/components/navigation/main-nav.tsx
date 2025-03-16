@@ -47,7 +47,6 @@ export function MainNav({ children }: MainNavProps) {
   // Redirect unauthenticated users from dashboard routes to login
   useEffect(() => {
     if (isDashboardRoute && status === "unauthenticated") {
-      console.log("Redirecting unauthenticated user from protected route:", pathname);
       const callbackUrl = encodeURIComponent(pathname);
       router.push(`/auth/login?callbackUrl=${callbackUrl}`);
     }
@@ -227,7 +226,7 @@ export function MainNav({ children }: MainNavProps) {
     return (
       <div className="flex flex-col h-screen overflow-hidden">
         {/* Top navigation bar */}
-        <nav className="border-b bg-background z-10">
+        <nav className="border-b bg-background z-10 h-14">
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-2">
@@ -309,7 +308,7 @@ export function MainNav({ children }: MainNavProps) {
           {/* Sidebar */}
           <aside
             className={cn(
-              "border-r bg-background transition-all duration-300 ease-in-out",
+              "border-r bg-background transition-all duration-300 ease-in-out h-[calc(100vh-3.5rem)]",
               sidebarCollapsed ? "w-16" : "w-64"
             )}
           >
@@ -352,8 +351,8 @@ export function MainNav({ children }: MainNavProps) {
           </aside>
           
           {/* Main content */}
-          <div className="flex-1 transition-all duration-300 ease-in-out">
-            <main className="md:pl-0">
+          <div className="flex-1 overflow-hidden transition-all duration-300 ease-in-out">
+            <main className="h-[calc(100vh-3.5rem)] overflow-auto md:pl-0">
               <DashboardShell>  
                 {children}
               </DashboardShell>
@@ -366,7 +365,7 @@ export function MainNav({ children }: MainNavProps) {
   
   // Regular navigation for non-dashboard routes
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <nav className="border-b bg-background">
         <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
@@ -485,7 +484,9 @@ export function MainNav({ children }: MainNavProps) {
           </div>
         )}
       </nav>
-      {children}
-    </>
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+    </div>
   );
 } 

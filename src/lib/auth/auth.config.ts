@@ -143,7 +143,6 @@ export const authConfig: NextAuthConfig = {
         if (token.id) {
           try {
             const organizations = await getUserOrganizations(token.id as string);
-            
             // If user has organizations but no default, set the first one as default
             if (organizations.length > 0 && !token.defaultOrganizationId) {
               token.defaultOrganizationId = organizations[0].id;

@@ -135,9 +135,6 @@ export function OptimisticOrganizationSettings({ organizationId }: { organizatio
         id: organizationId,
         ...data,
       });
-      
-      // Success toast is handled by the mutation's onSuccess callback
-      console.log("Form submitted:", data);
     } catch (error) {
       console.error("Error updating organization:", error);
       

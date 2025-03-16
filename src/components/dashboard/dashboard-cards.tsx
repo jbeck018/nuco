@@ -28,6 +28,7 @@ interface OrganizationDetails {
   name: string;
   role: string;
   members: number;
+  exists: boolean;
 }
 
 interface DashboardCardsProps {

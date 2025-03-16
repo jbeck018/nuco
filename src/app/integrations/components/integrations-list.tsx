@@ -6,7 +6,7 @@
  */
 
 'use client';;
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { useTRPC } from '@/lib/trpc/trpc';
@@ -97,15 +97,6 @@ export function IntegrationsList() {
   // Fetch authentication status for each integration type
   const { data: authStatus, isLoading: isLoadingAuthStatus } = 
     useQuery(trpc.integration.getAuthStatus.queryOptions());
-
-  // Display organization context info if applicable
-  useEffect(() => {
-    if (currentOrganization) {
-      console.log(`Loading integrations for organization: ${currentOrganization.name}`);
-    } else {
-      console.log('Loading personal integrations (no organization selected)');
-    }
-  }, [currentOrganization]);
 
   const queryClient = useQueryClient();
 

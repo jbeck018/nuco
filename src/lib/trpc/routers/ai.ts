@@ -10,10 +10,10 @@ import { TRPCError } from '@trpc/server';
 import { uuidv4 } from '@/lib/utils/edge-crypto';
 import { protectedProcedure, router } from '@/lib/trpc/server';
 import { db } from '@/lib/db';
-import { conversations, messages } from '@/lib/db/schema';
+import { conversations, messages, organizationSettings } from '@/lib/db/schema';
 import { desc, eq, and } from 'drizzle-orm';
-import { aiProviderEnum, availableModels, DEFAULT_MODEL_ID } from '@/lib/ai/config';
-import { countTokens } from '@/lib/ai/service';
+import { aiProviderEnum, availableModels } from '@/lib/ai/config';
+import { countTokens, updateTokenUsage } from '@/lib/ai/service';
 
 /**
  * Schema for creating a new conversation
@@ -53,6 +53,15 @@ export const completionSchema = z.object({
   frequencyPenalty: z.number().min(0).max(2).optional(),
   presencePenalty: z.number().min(0).max(2).optional(),
   maxTokens: z.number().optional(),
+});
+
+/**
+ * Schema for updating token usage
+ */
+const tokenUsageSchema = z.object({
+  organizationId: z.string().uuid(),
+  promptTokens: z.number().int().min(0),
+  completionTokens: z.number().int().min(0),
 });
 
 /**
@@ -325,7 +334,7 @@ export const aiRouter = router({
             role: input.role,
             content: input.content,
             tokens: tokenCount,
-            modelId: input.modelId || DEFAULT_MODEL_ID,
+            modelId: input.modelId,
           })
           .returning();
 
@@ -352,6 +361,81 @@ export const aiRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to add message',
+        });
+      }
+    }),
+    
+  /**
+   * Update token usage for an organization
+   */
+  updateTokenUsage: protectedProcedure
+    .input(tokenUsageSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const { organizationId, promptTokens, completionTokens } = input;
+        
+        // Get the organization settings
+        const settings = await db.query.organizationSettings.findFirst({
+          where: eq(organizationSettings.organizationId, organizationId),
+        });
+        
+        if (!settings || !settings.aiSettings) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Organization settings not found',
+          });
+        }
+        
+        // Get the current AI settings
+        const aiSettings = settings.aiSettings;
+        
+        // Create or update the usage limit
+        const usageLimit = aiSettings.usageLimit || {
+          monthlyTokenLimit: 1000000, // Default to 1M tokens
+          currentMonthUsage: 0,
+          resetDate: new Date().toISOString(),
+        };
+        
+        // Update the current month usage
+        const currentUsage = usageLimit.currentMonthUsage || 0;
+        const totalTokens = promptTokens + completionTokens;
+        const newUsage = currentUsage + totalTokens;
+        
+        // Update the settings
+        const [result] = await db.update(organizationSettings)
+          .set({
+            aiSettings: {
+              ...aiSettings,
+              usageLimit: {
+                ...usageLimit,
+                currentMonthUsage: newUsage,
+              },
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationSettings.organizationId, organizationId))
+          .returning();
+        
+        if (!result) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update token usage',
+          });
+        }
+        
+        return {
+          success: true,
+          previousUsage: currentUsage,
+          newUsage,
+          tokensAdded: totalTokens,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        
+        console.error('Error updating token usage:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update token usage',
         });
       }
     }),
