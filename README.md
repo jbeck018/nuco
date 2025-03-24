@@ -1,6 +1,6 @@
-# Nuco-App
+# Neuco-App
 
-Nuco-App is a Next.js application that provides AI-powered integrations with various business tools including Salesforce, HubSpot, Google, and Slack.
+Neuco-App is a Next.js application that provides AI-powered integrations with various business tools including Salesforce, HubSpot, Google, and Slack.
 
 ## Features
 
@@ -8,7 +8,7 @@ Nuco-App is a Next.js application that provides AI-powered integrations with var
 - **Organizations**: Multi-tenant architecture with role-based permissions
 - **AI Chat**: Advanced chat interface with streaming responses and function calling
 - **Prompt Templates**: Create, manage, and use reusable prompt templates
-- **Slack Integration**: Connect your Slack workspace and use the Nuco bot for AI chat and prompt templates
+- **Slack Integration**: Connect your Slack workspace and use the Neuco bot for AI chat and prompt templates
 - **Integrations**: Connect with Salesforce, HubSpot, and other business tools
 - **Function Calling**: Use AI to perform structured actions with external APIs
 - OAuth2 integrations with business platforms
@@ -43,8 +43,8 @@ Nuco-App is a Next.js application that provides AI-powered integrations with var
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/nuco-app.git
-   cd nuco-app
+   git clone https://github.com/yourusername/neuco-app.git
+   cd neuco-app
    ```
 
 2. Install dependencies:
@@ -73,7 +73,7 @@ Nuco-App is a Next.js application that provides AI-powered integrations with var
 ## Project Structure
 
 ```
-nuco-app/
+neuco-app/
 ├── app/                  # Next.js App Router
 │   ├── api/              # API routes
 │   │   ├── auth/         # Authentication endpoints

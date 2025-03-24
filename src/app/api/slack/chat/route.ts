@@ -3,9 +3,12 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { createSlackIntegration } from '@/lib/integrations/slack';
 import { db } from '@/lib/db';
-import { generateCompletion } from '@/lib/ai/service';
 import { AIServiceError } from '@/lib/ai/error';
 import { StreamTextResult, ToolSet } from 'ai';
+import { AgentFactory } from '@/lib/ai/agents/factory';
+import { Message } from '@/lib/ai/service';
+import { AgentContext } from '@/lib/ai/agents/base';
+import { AIService } from '@/lib/ai/service';
 
 /**
  * Custom function to convert StreamTextResult to string
@@ -24,98 +27,20 @@ async function streamTextResultToString(stream: StreamTextResult<ToolSet, never>
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
       
-      // Extract the text from the data chunk based on the format
-      if (value) {
-        if (typeof value === 'object' && value !== null) {
-          // Type guard to ensure value is a non-null object
-          const obj = value as Record<string, any>;
-          
-          if ('text' in obj && typeof obj.text === 'string') {
-            // Standard Vercel AI SDK format
-            result += obj.text;
-          } else if ('delta' in obj && obj.delta && typeof obj.delta === 'object' && 
-                    'content' in obj.delta && typeof obj.delta.content === 'string') {
-            // Delta format (used by some providers)
-            result += obj.delta.content;
-          } else if ('content' in obj && typeof obj.content === 'string') {
-            // Direct content format
-            result += obj.content;
-          } else if ('choices' in obj && Array.isArray(obj.choices) && 
-                    obj.choices.length > 0 && 
-                    obj.choices[0] && typeof obj.choices[0] === 'object' &&
-                    obj.choices[0].delta && typeof obj.choices[0].delta === 'object' &&
-                    'content' in obj.choices[0].delta && 
-                    typeof obj.choices[0].delta.content === 'string') {
-            // Raw OpenAI format
-            result += obj.choices[0].delta.content;
-          }
-        } else if (typeof value === 'string') {
-          // Plain text format
-          result += value;
-        }
+      if (done) {
+        break;
       }
+      
+      // Decode the chunk and add it to the result
+      const chunk = new TextDecoder().decode(value);
+      result += chunk;
     }
   } finally {
     reader.releaseLock();
   }
   
-  // Clean up any remaining formatting markers
-  return cleanLLMResponse(result);
-}
-
-/**
- * Clean the LLM response by removing metadata and formatting markers
- * @param response The raw response from the LLM
- * @returns Cleaned markdown text
- */
-function cleanLLMResponse(response: string): string {
-  // If the response is empty, return empty string
-  if (!response) return '';
-  
-  try {
-    // Handle the OpenAI-specific format with prefixes like f:, 0:, e:
-    if (response.includes('f:') && response.includes('0:')) {
-      let cleanedText = '';
-      
-      // Split the response by spaces to process each token
-      const parts = response.split(' ');
-      
-      for (const part of parts) {
-        // Check if this part contains actual content (starts with 0:")
-        if (part.startsWith('0:"')) {
-          // Extract the content between quotes
-          const content = part.substring(3); // Remove the '0:"' prefix
-          
-          // If the content ends with a quote, remove it
-          const cleanContent = content.endsWith('"') 
-            ? content.substring(0, content.length - 1) 
-            : content;
-          
-          cleanedText += cleanContent + ' ';
-        }
-        // Handle content that doesn't have a prefix but is part of the actual message
-        else if (!part.startsWith('f:') && !part.startsWith('e:') && !part.startsWith('d:')) {
-          // This might be content without a prefix or continuation
-          if (part.startsWith('"') || (!part.includes('{') && !part.includes('}'))) {
-            // Remove surrounding quotes if present
-            const cleanContent = part.replace(/^"|"$/g, '');
-            cleanedText += cleanContent + ' ';
-          }
-        }
-      }
-      
-      return cleanedText.trim();
-    }
-    
-    // If no special format is detected, return the original response
-    return response;
-  } catch (error) {
-    console.error('Error cleaning LLM response:', error);
-    // Return the original response if parsing fails
-    return response;
-  }
+  return result;
 }
 
 /**
@@ -200,65 +125,100 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
     
     try {
-      // Define the system prompt for Slack
-      const systemPrompt = 'You are a helpful AI assistant integrated with Slack. Provide concise, accurate responses to user queries. Format your responses using Slack markdown when appropriate.';
-      
-      // Generate a response using the AI service
-      const stream = await generateCompletion(
-        [
-          {
-            role: 'user',
-            content: message,
-          }
-        ],
-        {
-          modelId: 'gpt-4o', // Default model
-          systemPrompt,
-          temperature: 0.7,
+      // Create agent factory
+      const agentFactory = AgentFactory.getInstance({
+        defaultModelId: 'gpt-4',
+        defaultSystemPrompt: 'You are a helpful AI assistant integrated with Slack. Provide concise, accurate responses to user queries. Format your responses using Slack markdown when appropriate.',
+        metadata: {
           organizationId: orgId,
-          useCustomTokens,
-          customTokens
-        }
-      );
-      
-      // Convert the stream to a string using our custom function
-      const responseContent = await streamTextResultToString(stream);
-      
+        },
+      });
+
+      // Create a default agent
+      const agent = await agentFactory.createAgent('default', {
+        modelConfig: {
+          id: 'gpt-4',
+          name: 'GPT-4',
+          provider: 'openai',
+          contextWindow: 128000,
+          maxOutputTokens: 4096,
+          temperature: 0.7,
+          topP: 1,
+          frequencyPenalty: 0,
+          presencePenalty: 0,
+          costPer1kInput: 0.01,
+          costPer1kOutput: 0.03,
+        },
+      });
+
+      // Convert message to the correct type
+      const messages: Message[] = [{
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: message,
+        createdAt: new Date(),
+      }];
+
+      // Create agent context
+      const context: AgentContext = {
+        messages,
+        state: {
+          id: crypto.randomUUID(),
+          status: 'running',
+          lastUpdated: new Date(),
+          metadata: {},
+        },
+        config: {
+          id: crypto.randomUUID(),
+          name: 'default',
+          description: 'Default agent for handling Slack messages',
+          model: 'gpt-4',
+          aiService: new AIService(),
+        },
+        metadata: {
+          channelId,
+          threadTs,
+          userId: config.bot_user_id as string,
+          teamId: config.team_id as string,
+        },
+        executionId: crypto.randomUUID(),
+      };
+
+      // Execute the agent
+      const result = await agent.execute(context);
+
       // Send the response to Slack
       await slack.sendMessage({
         channel: channelId,
-        text: responseContent || 'No response generated',
+        text: typeof result === 'string' ? result : 'No response generated',
         thread_ts: threadTs,
       });
       
       // Return a success response
       return NextResponse.json({ success: true });
-    } catch (aiError) {
-      console.error('AI service error:', aiError);
+    } catch (error) {
+      console.error('Error processing message:', error);
       
-      let errorMessage = 'An error occurred while generating a response.';
-      
-      if (aiError instanceof AIServiceError) {
-        // Handle specific AI service errors
-        if (aiError.type === 'token_limit_exceeded') {
-          errorMessage = "⚠️ Token limit exceeded. Your organization has reached its monthly token usage limit. Please purchase more tokens or add a custom API key.";
-        } else {
-          errorMessage = `⚠️ ${aiError.message}`;
-        }
+      // Handle specific AI service errors
+      if (error instanceof AIServiceError) {
+        return NextResponse.json(
+          { 
+            error: error.message,
+            type: error.type,
+            code: error.code
+          },
+          { status: 500 }
+        );
       }
       
-      // Send the error message to Slack
-      await slack.sendMessage({
-        channel: channelId,
-        text: errorMessage,
-        thread_ts: threadTs,
-      });
-      
-      // Return a success response since we've handled the error by sending a message to Slack
-      return NextResponse.json({ success: true, message: 'Error message sent to Slack' });
+      // Handle generic errors
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 }
+      );
     }
   } catch (error) {
-    console.error('Slack chat error:', error);
+    console.error('API route error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

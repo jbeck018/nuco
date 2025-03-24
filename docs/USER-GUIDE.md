@@ -2,7 +2,7 @@
 
 ## Metadata and User Preferences
 
-Nuco provides a flexible metadata storage system that stores user preferences, organization settings, and integration-specific configurations. This system ensures a personalized experience for each user while maintaining organization-wide consistency when needed.
+Neuco provides a flexible metadata storage system that stores user preferences, organization settings, and integration-specific configurations. This system ensures a personalized experience for each user while maintaining organization-wide consistency when needed.
 
 ### User Preferences
 
@@ -103,7 +103,7 @@ For more technical users, API settings provide control over how integrations beh
 Some integrations support mapping custom fields:
 
 1. In the integration settings, navigate to the "Field Mapping" section
-2. Map standard Nuco fields to your integration's fields
+2. Map standard Neuco fields to your integration's fields
 3. For custom fields, use the "Add Custom Field" button to create new mappings
 
 ## Troubleshooting

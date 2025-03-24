@@ -12,7 +12,7 @@ export function StaticHero() {
           AI-Powered Integrations for Your Business Tools
         </h1>
         <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-          Nuco seamlessly connects your business tools with AI capabilities, enhancing productivity and unlocking new insights.
+          Neuco seamlessly connects your business tools with AI capabilities, enhancing productivity and unlocking new insights.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4">
           <Link href="/auth/signup">

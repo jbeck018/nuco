@@ -1,22 +1,29 @@
 {
     "cSpell.words": [
+        "chartjs",
         "closedate",
         "cmdk",
+        "dbscan",
         "dealname",
         "dealstage",
         "firstname",
         "hubspot",
+        "kmeans",
         "lastname",
         "lucide",
         "millicents",
         "mpim",
         "neondatabase",
-        "Nuco",
+        "Neuco",
         "refetches",
         "slugified",
         "sonner",
         "thumbsdown",
         "thumbsup",
-        "uuidv"
+        "uuidv",
+        "xack",
+        "xadd",
+        "xgroup",
+        "xreadgroup"
     ]
 }

@@ -1,10 +1,10 @@
-# AI Integrations Setup for Nuco-App
+# AI Integrations Setup for Neuco-App
 
-This document provides instructions for setting up AI integrations in Nuco-App, including OpenAI, Anthropic, Google AI, and Vercel AI.
+This document provides instructions for setting up AI integrations in Neuco-App, including OpenAI, Anthropic, Google AI, and Vercel AI.
 
 ## Overview
 
-Nuco-App leverages various AI providers to enhance functionality and provide intelligent features to users. These integrations enable capabilities such as:
+Neuco-App leverages various AI providers to enhance functionality and provide intelligent features to users. These integrations enable capabilities such as:
 
 - Natural language processing
 - Content generation
@@ -17,8 +17,8 @@ Nuco-App leverages various AI providers to enhance functionality and provide int
 
 Before setting up AI integrations, ensure you have:
 
-1. A running instance of Nuco-App
-2. Admin access to your organization in Nuco-App
+1. A running instance of Neuco-App
+2. Admin access to your organization in Neuco-App
 3. Accounts with the AI providers you want to integrate
 4. Proper environment variables configured in your `.env` file
 
@@ -41,7 +41,7 @@ OPENAI_API_KEY=your-openai-api-key
 
 ### Available Models
 
-Nuco-App supports the following OpenAI models:
+Neuco-App supports the following OpenAI models:
 
 - GPT-4 (recommended for complex tasks)
 - GPT-3.5-Turbo (good balance of performance and cost)
@@ -71,7 +71,7 @@ ANTHROPIC_API_KEY=your-anthropic-api-key
 
 ### Available Models
 
-Nuco-App supports the following Anthropic models:
+Neuco-App supports the following Anthropic models:
 
 - Claude 3 Opus (highest capability)
 - Claude 3 Sonnet (balanced performance)
@@ -103,7 +103,7 @@ GOOGLE_AI_API_KEY=your-google-ai-api-key
 
 ### Available Models
 
-Nuco-App supports the following Google AI models:
+Neuco-App supports the following Google AI models:
 
 - Gemini Pro (general purpose)
 - Gemini Pro Vision (multimodal capabilities)
@@ -148,11 +148,11 @@ Vercel AI SDK provides:
 - Consider using it for streaming responses and edge deployments
 - Monitor usage to manage costs
 
-## Using AI Features in Nuco-App
+## Using AI Features in Neuco-App
 
 ### Enabling AI Features
 
-1. Log in to Nuco-App
+1. Log in to Neuco-App
 2. Navigate to your organization settings
 3. Go to the "AI Settings" tab
 4. Enable the AI features you want to use

@@ -15,6 +15,13 @@
       "when": 1742146361900,
       "tag": "0001_narrow_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1742778170481,
+      "tag": "0002_numerous_ben_grimm",
+      "breakpoints": true
     }
   ]
 }

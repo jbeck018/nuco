@@ -1,7 +1,7 @@
 # Stripe Integration Summary
 
 ## Overview
-This document provides a comprehensive summary of the Stripe integration implemented in Nuco-App for subscription management and billing. The integration enables organizations to subscribe to different plans, manage their billing information, and access subscription details through a user-friendly interface.
+This document provides a comprehensive summary of the Stripe integration implemented in Neuco-App for subscription management and billing. The integration enables organizations to subscribe to different plans, manage their billing information, and access subscription details through a user-friendly interface.
 
 ## Components Implemented
 
@@ -85,4 +85,4 @@ To complete the setup, the following steps are required:
 
 ---
 
-This integration provides a solid foundation for monetizing the Nuco-App platform through subscription-based pricing, with the flexibility to adapt to changing business requirements. 
+This integration provides a solid foundation for monetizing the Neuco-App platform through subscription-based pricing, with the flexibility to adapt to changing business requirements. 

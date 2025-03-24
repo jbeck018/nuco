@@ -4,7 +4,7 @@
  * This file provides a unified interface for interacting with various AI providers.
  * It handles provider selection, message formatting, and response processing.
  */
-import { StreamTextResult, ToolSet } from 'ai';
+import { StreamTextResult, ToolSet, streamText } from 'ai';
 import { AIProvider, ModelConfig, getModelById } from './config';
 import { generateOpenAIStream, OpenAIFunction, OpenAIError, OpenAIErrorType } from './providers/openai';
 import { generateClaudeStream } from './providers/claude';
@@ -15,39 +15,14 @@ import { organizationSettings } from '@/lib/db/schema/organization-settings';
 import { AIServiceError } from './error';
 import { formatMessages } from './utils';
 import { estimateTokenCount } from './tokenizer';
-
-/**
- * Message type for AI conversations
- */
-export interface Message {
-  id: string;
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-  createdAt: Date;
-}
-
-/**
- * AI completion options
- */
-export interface CompletionOptions {
-  modelId?: string;
-  systemPrompt?: string;
-  temperature?: number;
-  topP?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-  maxTokens?: number;
-  functions?: OpenAIFunction[];
-  organizationId?: string;
-  userId?: string;
-  customTokens?: {
-    openai?: string;
-    anthropic?: string;
-    google?: string;
-    custom?: string;
-  };
-  useCustomTokens?: boolean;
-}
+import { AgentOrchestrator } from './agents/orchestrator';
+import { ChainService } from './service/chain-service';
+import { ChainConfig, AgentChain } from './agents/chain';
+import { Message, CompletionOptions } from './types';
+import { AgentContext, AgentState, AgentConfig } from './agents/base';
+import crypto from 'crypto';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAnthropic } from '@ai-sdk/anthropic';
 
 /**
  * Maximum number of retry attempts for rate-limited requests
@@ -199,8 +174,7 @@ export async function generateCompletion(
       const serviceError = new AIServiceError(
         error.message,
         'openai',
-        error.type,
-        error.status
+        error.type
       );
       serviceError.retryAfter = error.retryAfter;
 
@@ -326,4 +300,116 @@ export async function updateTokenUsage(organizationId: string, tokenCount: numbe
     console.error('Error updating token usage:', error);
     return false;
   }
-} 
+}
+
+export class AIService {
+  private orchestrator: AgentOrchestrator;
+  private chainService: ChainService;
+
+  constructor() {
+    this.orchestrator = new AgentOrchestrator({
+      maxConcurrentAgents: 10,
+      resourceLimits: {
+        memory: 1024, // 1GB
+        cpu: 8,
+        network: 100 // 100MB/s
+      },
+      retryConfig: {
+        maxAttempts: 3,
+        backoffMs: 1000
+      },
+      monitoring: {
+        enabled: true,
+        metricsInterval: 60000 // 1 minute
+      }
+    });
+
+    this.chainService = new ChainService(this.orchestrator);
+  }
+
+  async initialize(): Promise<void> {
+    await this.orchestrator.initialize();
+    await this.chainService.initialize();
+  }
+
+  // Chain Operations
+  async createChain(config: ChainConfig): Promise<AgentChain> {
+    return this.chainService.createChain(config);
+  }
+
+  async getChain(id: string): Promise<AgentChain> {
+    return this.chainService.getChain(id);
+  }
+
+  async listChains(): Promise<ChainConfig[]> {
+    return this.chainService.listChains();
+  }
+
+  async deleteChain(id: string): Promise<void> {
+    return this.chainService.deleteChain(id);
+  }
+
+  async executeChain(id: string, context: any): Promise<any[]> {
+    return this.chainService.executeChain(id, context);
+  }
+
+  // Direct Agent Operations (for backward compatibility)
+  async generateCompletion(
+    messages: Message[],
+    options: CompletionOptions
+  ): Promise<StreamTextResult<ToolSet, never>> {
+    const context: AgentContext = {
+      messages,
+      metadata: options.metadata || {},
+      executionId: options.executionId || crypto.randomUUID(),
+      attempt: options.attempt,
+      state: {
+        id: crypto.randomUUID(),
+        status: 'idle',
+        lastUpdated: new Date(),
+        metadata: {}
+      },
+      config: {
+        id: 'default',
+        name: 'Default Agent',
+        description: 'Default agent for handling general queries',
+        model: options.modelId || 'gpt-4',
+        aiService: this,
+        metadata: options.metadata || {}
+      }
+    };
+
+    const result = await this.orchestrator.executeAgent('default', context);
+    
+    // Create the appropriate provider client based on the model ID
+    const modelId = options.modelId || 'gpt-4';
+    const provider = modelId.startsWith('gpt') ? 'openai' : 'anthropic';
+    const client = provider === 'openai' 
+      ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    return streamText({
+      model: client(modelId),
+      messages,
+      temperature: options.temperature || 0.7,
+      maxTokens: options.maxTokens || 1000,
+      topP: options.topP || 1
+    });
+  }
+
+  // Metrics and Monitoring
+  getChainMetrics() {
+    return this.chainService.getMetrics();
+  }
+
+  // Cleanup
+  async cleanup(): Promise<void> {
+    await this.chainService.cleanup();
+  }
+}
+
+// Export singleton instance
+export const aiService = new AIService();
+
+// Export types
+export type { Message, CompletionOptions, StreamTextResult, ToolSet, ChainConfig, AgentChain }; 

@@ -84,7 +84,7 @@ export function DashboardError() {
           <DialogHeader>
             <DialogTitle>Create New Organization</DialogTitle>
             <DialogDescription>
-              Create a new organization to get started with Nuco.
+              Create a new organization to get started with Neuco.
             </DialogDescription>
           </DialogHeader>
           
