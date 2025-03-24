@@ -13,19 +13,19 @@ import { SlackIntegration } from '@/lib/integrations/slack';
  * Creates a welcome message with header, text, and buttons
  */
 export function createWelcomeMessage(channelId: string): ReturnType<typeof createMessageBuilder.prototype.build> {
-  return createMessageBuilder('Welcome to Nuco AI!')
+  return createMessageBuilder('Welcome to Neuco AI!')
     .channel(channelId)
-    .addHeader('Welcome to Nuco AI!')
-    .addSection('Thanks for adding Nuco AI to your Slack workspace. Here are some things you can do:')
+    .addHeader('Welcome to Neuco AI!')
+    .addSection('Thanks for adding Neuco AI to your Slack workspace. Here are some things you can do:')
     .addDivider()
-    .addSection('*Chat with AI*\nUse `/nuco chat [your message]` to start a conversation with our AI.')
-    .addSection('*Use Templates*\nAccess your prompt templates with `/nuco templates`.')
-    .addSection('*Get Help*\nType `/nuco help` to see all available commands.')
+    .addSection('*Chat with AI*\nUse `/neuco chat [your message]` to start a conversation with our AI.')
+    .addSection('*Use Templates*\nAccess your prompt templates with `/neuco templates`.')
+    .addSection('*Get Help*\nType `/neuco help` to see all available commands.')
     .addActions([
       {
         text: 'View Documentation',
         actionId: 'view_docs',
-        url: 'https://docs.nuco.ai'
+        url: 'https://docs.neuco.ai'
       },
       {
         text: 'Settings',
@@ -117,7 +117,7 @@ export function createErrorMessage(
     ])
     .addConfirmationDialog(
       'Report Issue',
-      'Are you sure you want to report this issue to the Nuco team?',
+      'Are you sure you want to report this issue to the Neuco team?',
       'Yes, Report',
       'Cancel',
       'danger'
@@ -140,7 +140,7 @@ export function createTemplateListMessage(
     .addDivider();
   
   if (templates.length === 0) {
-    builder.addSection('You don\'t have any templates yet. Create one in the Nuco dashboard.');
+    builder.addSection('You don\'t have any templates yet. Create one in the Neuco dashboard.');
   } else {
     templates.forEach(template => {
       builder.addSection(`*${template.name}*\n${template.description}`);

@@ -1,6 +1,6 @@
-# Stripe Integration for Nuco-App
+# Stripe Integration for Neuco-App
 
-This document provides instructions for setting up and testing the Stripe integration for Nuco-App.
+This document provides instructions for setting up and testing the Stripe integration for Neuco-App.
 
 ## Setup
 

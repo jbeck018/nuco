@@ -1,6 +1,6 @@
 # Cloudflare Pages Deployment Guide
 
-This guide explains how to deploy the Nuco application to Cloudflare Pages.
+This guide explains how to deploy the Neuco application to Cloudflare Pages.
 
 ## Prerequisites
 
@@ -43,11 +43,11 @@ output_directory = ".next/standalone"
 bucket = ".next/standalone"
 
 [env.production]
-name = "nuco-production"
+name = "neuco-production"
 route = ""
 
 [env.preview]
-name = "nuco-preview"
+name = "neuco-preview"
 ```
 
 ### next.config.ts
@@ -95,5 +95,5 @@ To set up a custom domain:
 
 ## Deployment URLs
 
-- Main deployment URL: https://990cd598.nuco-5ub.pages.dev
-- Branch deployment URL: https://cloudfare.nuco-5ub.pages.dev 
+- Main deployment URL: https://990cd598.neuco-5ub.pages.dev
+- Branch deployment URL: https://cloudfare.neuco-5ub.pages.dev 

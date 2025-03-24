@@ -1,6 +1,6 @@
 # Testing Google OAuth Authentication
 
-This document provides comprehensive guidance on testing Google OAuth authentication in the Nuco-App.
+This document provides comprehensive guidance on testing Google OAuth authentication in the Neuco-App.
 
 ## Overview
 

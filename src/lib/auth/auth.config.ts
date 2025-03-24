@@ -40,8 +40,10 @@ declare module "next-auth/jwt" {
     role?: string;
     id?: string;
     accessToken?: string;
+    refreshToken?: string;
     provider?: string;
     defaultOrganizationId?: string;
+    expiresAt?: number;
   }
 }
 
@@ -53,7 +55,14 @@ import { getUserOrganizations, createOrganization } from "@/lib/organizations/se
 /**
  * Helper function to create or update an integration in the database
  */
-async function createOrUpdateIntegration(userId: string, provider: IntegrationType, accessToken: string, organizationId?: string) {
+async function createOrUpdateIntegration(
+  userId: string, 
+  provider: IntegrationType, 
+  accessToken: string, 
+  organizationId?: string,
+  refreshToken?: string,
+  expiresAt?: number
+) {
   try {
     // Check if the integration already exists
     const existingIntegrations = await db.select().from(integrations).where(
@@ -63,7 +72,11 @@ async function createOrUpdateIntegration(userId: string, provider: IntegrationTy
       )
     );
     
-    const config = { accessToken };
+    const config = { 
+      accessToken,
+      refreshToken,
+      expiresAt
+    };
     
     if (existingIntegrations.length > 0) {
       // Update the existing integration
@@ -136,14 +149,14 @@ export const authConfig: NextAuthConfig = {
       // Add OAuth access token to the token
       if (account) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
         token.provider = account.provider;
+        token.expiresAt = account.expires_at ? account.expires_at * 1000 : undefined;
         
         // For OAuth sign-ins, check if the user has an organization
-        // We'll now handle organization creation in the complete-signup page
         if (token.id) {
           try {
             const organizations = await getUserOrganizations(token.id as string);
-            // If user has organizations but no default, set the first one as default
             if (organizations.length > 0 && !token.defaultOrganizationId) {
               token.defaultOrganizationId = organizations[0].id;
             }
@@ -154,7 +167,9 @@ export const authConfig: NextAuthConfig = {
                 token.id as string,
                 account.provider as IntegrationType,
                 account.access_token as string,
-                token.defaultOrganizationId as string | undefined
+                token.defaultOrganizationId as string | undefined,
+                account.refresh_token as string | undefined,
+                account.expires_at
               );
             }
           } catch (error) {
@@ -163,6 +178,131 @@ export const authConfig: NextAuthConfig = {
         }
       }
       
+      // Check if token needs refresh (including expired tokens)
+      if (token.expiresAt && (Date.now() >= token.expiresAt - 5 * 60 * 1000 || Date.now() >= token.expiresAt)) {
+        const startTime = Date.now();
+        const refreshAttempt = {
+          provider: token.provider,
+          userId: token.id,
+          timestamp: new Date().toISOString(),
+          attemptNumber: 0,
+          success: false,
+          error: null as string | null,
+          duration: 0,
+          retryCount: 0,
+        };
+
+        try {
+          let response;
+          let retryCount = 0;
+          const maxRetries = 3;
+          const retryDelay = 1000; // 1 second
+
+          while (retryCount < maxRetries) {
+            refreshAttempt.attemptNumber++;
+            refreshAttempt.retryCount = retryCount;
+            
+            try {
+              if (token.provider === 'salesforce') {
+                response = await fetch(`${process.env.SALESFORCE_URL}/services/oauth2/token`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                  },
+                  body: new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    client_id: process.env.SALESFORCE_CLIENT_ID!,
+                    client_secret: process.env.SALESFORCE_CLIENT_SECRET!,
+                    refresh_token: token.refreshToken as string,
+                  }),
+                });
+              } else if (token.provider === 'hubspot') {
+                response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                  },
+                  body: new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    client_id: process.env.HUBSPOT_CLIENT_ID!,
+                    client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
+                    refresh_token: token.refreshToken as string,
+                  }),
+                });
+              }
+
+              if (!response) throw new Error('Invalid provider');
+
+              const tokens = await response.json();
+
+              if (!response.ok) {
+                // Check if the error is due to an invalid refresh token
+                if (tokens.error === 'invalid_grant' || tokens.error === 'invalid_token') {
+                  refreshAttempt.error = `Invalid refresh token: ${tokens.error}`;
+                  console.error('Token refresh monitoring:', {
+                    ...refreshAttempt,
+                    duration: Date.now() - startTime,
+                  });
+                  return { ...token, error: 'RefreshTokenExpired' };
+                }
+                throw tokens;
+              }
+
+              // Update token with new values
+              token.accessToken = tokens.access_token;
+              token.expiresAt = Date.now() + tokens.expires_in * 1000;
+
+              // Update the integration in the database
+              if (token.id && (token.provider === 'salesforce' || token.provider === 'hubspot')) {
+                await createOrUpdateIntegration(
+                  token.id,
+                  token.provider as IntegrationType,
+                  tokens.access_token,
+                  token.defaultOrganizationId,
+                  token.refreshToken,
+                  Math.floor(Date.now() / 1000) + tokens.expires_in
+                );
+              }
+
+              // Log successful refresh
+              refreshAttempt.success = true;
+              console.info('Token refresh monitoring:', {
+                ...refreshAttempt,
+                duration: Date.now() - startTime,
+                newExpiry: new Date(token.expiresAt).toISOString(),
+              });
+
+              // Successfully refreshed, break the retry loop
+              break;
+            } catch (error) {
+              retryCount++;
+              refreshAttempt.error = error instanceof Error ? error.message : 'Unknown error';
+              
+              if (retryCount === maxRetries) {
+                throw error;
+              }
+              
+              // Log retry attempt
+              console.warn('Token refresh monitoring - retry:', {
+                ...refreshAttempt,
+                duration: Date.now() - startTime,
+              });
+              
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
+            }
+          }
+        } catch (error) {
+          refreshAttempt.error = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Token refresh monitoring - final failure:', {
+            ...refreshAttempt,
+            duration: Date.now() - startTime,
+          });
+          // If we've exhausted all retries, mark the token as needing reauthorization
+          return { ...token, error: 'RefreshAccessTokenError' };
+        }
+      }
+
       return token;
     },
     session({ session, token }) {
@@ -188,15 +328,35 @@ export const authConfig: NextAuthConfig = {
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
-          scope: "openid id profile email address phone full",
+          scope: "openid id profile email address phone full refresh_token",
         }
       },
-      // issuer: process.env.SALESFORCE_URL,
+      async profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+        };
+      },
     }),
     HubSpot({
       clientId: process.env.HUBSPOT_CLIENT_ID!,
       clientSecret: process.env.HUBSPOT_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          scope: "oauth contacts timeline crm.objects.contacts.read crm.objects.contacts.write crm.objects.companies.read crm.objects.companies.write crm.objects.deals.read crm.objects.deals.write refresh_token",
+        }
+      },
+      async profile(profile) {
+        return {
+          id: profile.id,
+          name: profile.properties?.firstname ? `${profile.properties.firstname} ${profile.properties.lastname || ''}`.trim() : profile.email,
+          email: profile.properties?.email || profile.email,
+          image: profile.properties?.avatar,
+        };
+      },
     }),
     Credentials({
       id: "credentials",

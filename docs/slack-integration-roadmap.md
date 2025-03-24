@@ -1,6 +1,6 @@
 # Slack Integration Roadmap
 
-This document outlines the roadmap for advanced Slack integration features in the Nuco-App.
+This document outlines the roadmap for advanced Slack integration features in the Neuco-App.
 
 ## Completed Features
 

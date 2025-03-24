@@ -1,6 +1,6 @@
 # Extension Framework Architecture
 
-This document outlines the architecture for the Nuco-App Extension Framework, which will allow third-party developers to extend the functionality of the application through custom extensions.
+This document outlines the architecture for the Neuco-App Extension Framework, which will allow third-party developers to extend the functionality of the application through custom extensions.
 
 ## Overview
 
@@ -186,4 +186,4 @@ Each extension will have its own isolated storage space to prevent data leakage 
 
 ## Conclusion
 
-The Extension Framework will provide a powerful way for developers to extend the functionality of the Nuco-App while maintaining security and stability. By following a structured approach to extension development and management, we can create a vibrant ecosystem of extensions that enhance the value of the application for users. 
+The Extension Framework will provide a powerful way for developers to extend the functionality of the Neuco-App while maintaining security and stability. By following a structured approach to extension development and management, we can create a vibrant ecosystem of extensions that enhance the value of the application for users. 

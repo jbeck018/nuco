@@ -1,6 +1,6 @@
-# Setting Up Google OAuth for Nuco-App
+# Setting Up Google OAuth for Neuco-App
 
-This guide provides step-by-step instructions for setting up Google OAuth authentication for Nuco-App.
+This guide provides step-by-step instructions for setting up Google OAuth authentication for Neuco-App.
 
 ## Overview
 
@@ -17,7 +17,7 @@ Google OAuth allows users to sign in to your application using their Google acco
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
 2. Click on the project dropdown at the top of the page
 3. Click on "New Project"
-4. Enter a name for your project (e.g., "Nuco-App")
+4. Enter a name for your project (e.g., "Neuco-App")
 5. Click "Create"
 
 ## Step 2: Configure the OAuth Consent Screen
@@ -28,7 +28,7 @@ Google OAuth allows users to sign in to your application using their Google acco
    - "Internal" if you only want users within your organization to sign in
 3. Click "Create"
 4. Fill in the required information:
-   - App name: "Nuco-App"
+   - App name: "Neuco-App"
    - User support email: Your email address
    - Developer contact information: Your email address
 5. Click "Save and Continue"
@@ -46,7 +46,7 @@ Google OAuth allows users to sign in to your application using their Google acco
 1. In your Google Cloud project, navigate to "APIs & Services" > "Credentials"
 2. Click "Create Credentials" > "OAuth client ID"
 3. Select "Web application" as the application type
-4. Enter a name for the OAuth client (e.g., "Nuco-App Web Client")
+4. Enter a name for the OAuth client (e.g., "Neuco-App Web Client")
 5. Add authorized JavaScript origins:
    - For local development: `http://localhost:3000`
    - For production: `https://your-production-domain.com`

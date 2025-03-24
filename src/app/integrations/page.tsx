@@ -16,7 +16,7 @@ import { IntegrationsHeader } from './components/integrations-header';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export const metadata: Metadata = {
-  title: 'Integrations | Nuco',
+  title: 'Integrations | Neuco',
   description: 'Manage your integrations with external services',
 };
 

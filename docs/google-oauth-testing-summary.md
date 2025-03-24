@@ -1,6 +1,6 @@
 # Google OAuth Testing Implementation Summary
 
-This document provides a summary of all the work completed for implementing Google OAuth testing in the Nuco-App.
+This document provides a summary of all the work completed for implementing Google OAuth testing in the Neuco-App.
 
 ## Completed Work
 
@@ -74,4 +74,4 @@ This document provides a summary of all the work completed for implementing Goog
 
 ## Conclusion
 
-The Google OAuth testing implementation provides a robust framework for ensuring the reliability of the authentication system. The combination of automated tests, comprehensive documentation, and CI/CD integration creates a solid foundation for maintaining and expanding the authentication capabilities of the Nuco-App. 
+The Google OAuth testing implementation provides a robust framework for ensuring the reliability of the authentication system. The combination of automated tests, comprehensive documentation, and CI/CD integration creates a solid foundation for maintaining and expanding the authentication capabilities of the Neuco-App. 

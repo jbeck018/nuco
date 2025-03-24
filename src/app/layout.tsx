@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AppRouter } from "@/lib/trpc/router";
 import { QueryClient } from '@tanstack/react-query';
-import { Providers } from "@/components/providers";
+import { Providers } from "@/app/providers";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -118,7 +118,7 @@ export default function RootLayout({
                   <div className="container mx-auto px-4">
                     <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
                       <p className="text-center text-sm text-muted-foreground">
-                        &copy; {new Date().getFullYear()} Nuco. All rights reserved.
+                        &copy; {new Date().getFullYear()} Neuco. All rights reserved.
                       </p>
                       <div className="flex items-center space-x-4">
                         <a

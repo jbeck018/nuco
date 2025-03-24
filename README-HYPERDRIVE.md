@@ -22,7 +22,7 @@ The `wrangler.toml` file contains the binding configuration for Cloudflare Worke
 ```toml
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "nuco-hyperdrive"
+id = "neuco-hyperdrive"
 ```
 
 - `binding`: The name of the binding in your Workers code

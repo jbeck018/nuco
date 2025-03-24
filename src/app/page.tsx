@@ -11,8 +11,8 @@ export const runtime = 'nodejs';
 
 // Static metadata for the page
 export const metadata = {
-  title: 'Nuco - AI-Powered Integrations for Your Business Tools',
-  description: 'Nuco seamlessly connects your business tools with AI capabilities, enhancing productivity and unlocking new insights.',
+  title: 'Neuco - AI-Powered Integrations for Your Business Tools',
+  description: 'Neuco seamlessly connects your business tools with AI capabilities, enhancing productivity and unlocking new insights.',
 };
 
 export default function Home() {

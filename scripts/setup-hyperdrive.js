@@ -15,7 +15,7 @@ import { config } from 'dotenv';
 config();
 
 // Configuration
-const HYPERDRIVE_NAME = 'nuco-hyperdrive';
+const HYPERDRIVE_NAME = 'neuco-hyperdrive';
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {

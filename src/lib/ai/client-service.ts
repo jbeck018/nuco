@@ -24,6 +24,13 @@ export interface ClientCompletionOptions {
 }
 
 /**
+ * Client-side agent completion options
+ */
+export interface ClientAgentCompletionOptions extends ClientCompletionOptions {
+  agentId: string;
+}
+
+/**
  * Generate a streaming completion from the AI service via server API
  * @param messages The messages to send to the API
  * @param options The options for the completion
@@ -41,7 +48,7 @@ export async function generateClientCompletion(
     };
 
     // Create a fetch request to our API endpoint
-    const response = await fetch('/api/ai/completion', {
+    const response = await fetch('/api/ai/agent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,4 +113,7 @@ export async function generateClientCompletion(
     console.error('Client AI service error:', error);
     throw error;
   }
-} 
+}
+
+// Export the same function with a different name for backward compatibility
+export const generateClientAgentCompletion = generateClientCompletion; 

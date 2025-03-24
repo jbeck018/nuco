@@ -16,7 +16,7 @@ export function DynamicTestimonials() {
           What Our Customers Say
         </h2>
         <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-          Hear from businesses that have transformed their workflows with Nuco&apos;s AI-powered integrations.
+          Hear from businesses that have transformed their workflows with Neuco&apos;s AI-powered integrations.
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -39,7 +39,7 @@ function getTestimonials() {
       role: "Marketing Director",
       company: "TechGrowth Inc.",
       avatar: "/avatars/sarah.jpg",
-      content: "Nuco has revolutionized how we manage our marketing campaigns. The AI integration with HubSpot saves us hours every week and provides insights we never had before.",
+      content: "Neuco has revolutionized how we manage our marketing campaigns. The AI integration with HubSpot saves us hours every week and provides insights we never had before.",
     },
     {
       id: 2,
@@ -55,7 +55,7 @@ function getTestimonials() {
       role: "Operations Lead",
       company: "Streamline Solutions",
       avatar: "/avatars/emily.jpg",
-      content: "We've connected all our business tools through Nuco, and the difference is night and day. The real-time data synchronization ensures everyone is working with the most up-to-date information.",
+      content: "We've connected all our business tools through Neuco, and the difference is night and day. The real-time data synchronization ensures everyone is working with the most up-to-date information.",
     },
   ];
 }

@@ -81,6 +81,15 @@ export interface Env {
   // Logging and Monitoring
   LOG_LEVEL: string;
   SENTRY_DSN: string;
+
+  // Storage Configuration
+  // R2
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  R2_ACCOUNT_ID: string;
+
+  NEXT_PUBLIC_POSTHOG_KEY: string;
+  NEXT_PUBLIC_POSTHOG_HOST: string;
 }
 
 // Get environment variables in a way that works in both Node.js and Edge Runtime
@@ -89,6 +98,9 @@ export function getEnv(): Env {
     // Application Configuration
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     NODE_ENV: process.env.NODE_ENV || 'development',
+
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY || '',
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST || '',
 
     // NextAuth Configuration
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
@@ -160,6 +172,12 @@ export function getEnv(): Env {
     // Logging and Monitoring
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
     SENTRY_DSN: process.env.SENTRY_DSN || '',
+
+    // Storage Configuration
+    // R2
+    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID || '',
+    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY || '',
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID || '',
   };
 }
 

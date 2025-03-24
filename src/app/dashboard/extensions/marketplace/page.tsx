@@ -39,8 +39,8 @@ const mockMarketplaceExtensions: MarketplaceExtension[] = [
     version: "1.0.0",
     type: "slack",
     author: {
-      name: "Nuco Team",
-      email: "team@nuco.dev",
+      name: "Neuco Team",
+      email: "team@neuco.dev",
     },
     isVerified: true,
     downloadCount: "1.2k",
@@ -54,8 +54,8 @@ const mockMarketplaceExtensions: MarketplaceExtension[] = [
     version: "1.1.0",
     type: "salesforce",
     author: {
-      name: "Nuco Team",
-      email: "team@nuco.dev",
+      name: "Neuco Team",
+      email: "team@neuco.dev",
     },
     isVerified: true,
     downloadCount: "980",
@@ -80,7 +80,7 @@ const mockMarketplaceExtensions: MarketplaceExtension[] = [
   {
     id: "api-gateway",
     name: "API Gateway",
-    description: "Create custom API endpoints for your Nuco instance with rate limiting and auth.",
+    description: "Create custom API endpoints for your Neuco instance with rate limiting and auth.",
     version: "1.2.0",
     type: "api",
     author: {
@@ -238,7 +238,7 @@ export default function MarketplacePage() {
     <>
       <DashboardHeader
         heading="Extension Marketplace"
-        text="Discover and install extensions to enhance your Nuco experience."
+        text="Discover and install extensions to enhance your Neuco experience."
       >
         <Button variant="outline" onClick={() => router.push("/dashboard/extensions")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -292,7 +292,7 @@ export default function MarketplacePage() {
                       <CardTitle className="text-lg flex items-center">
                         {extension.name}
                         {extension.isVerified && (
-                          <span className="ml-2 text-blue-500" title="Verified by Nuco">
+                          <span className="ml-2 text-blue-500" title="Verified by Neuco">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"

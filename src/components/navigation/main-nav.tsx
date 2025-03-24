@@ -168,7 +168,7 @@ export function MainNav({ children }: MainNavProps) {
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
               <div className="flex items-center space-x-2">
-                <span className="text-xl font-bold">Nuco</span>
+                <span className="text-xl font-bold">Neuco</span>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -230,7 +230,7 @@ export function MainNav({ children }: MainNavProps) {
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-2">
-                <span className="text-xl font-bold">Nuco</span>
+                <span className="text-xl font-bold">Neuco</span>
               </Link>
             </div>
             
@@ -370,7 +370,7 @@ export function MainNav({ children }: MainNavProps) {
         <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
-              <span className="text-xl font-bold">Nuco</span>
+              <span className="text-xl font-bold">Neuco</span>
             </Link>
           </div>
           

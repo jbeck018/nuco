@@ -29,6 +29,9 @@ import { useOrganizationSettings } from '@/hooks/useOrganizationSettings';
 import { useOrganization } from '@/lib/organizations/context';
 import { extractTokenUsage } from '@/lib/ai/utils';
 import { useCompletion } from '@ai-sdk/react';
+import { DashboardMessage } from './dashboard-message';
+import { DashboardReportingAgent } from '@/lib/ai/agents/dashboard/base';
+import { AIService } from '@/lib/ai/service';
 
 import { useMutation } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +41,8 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+  type?: 'text' | 'dashboard';
+  agent?: DashboardReportingAgent;
 }
 
 export interface ChatInterfaceProps {
@@ -58,6 +63,7 @@ export function ChatInterface({
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [input, setInput] = useState('');
   
   // Get AI preferences from the hook
   const { preferences: aiPreferences } = useAiPreferences();
@@ -72,7 +78,7 @@ export function ChatInterface({
     complete,
     error,
   } = useCompletion({
-    api: '/api/ai/completion',
+    api: '/api/ai/agent', // Always use the agent endpoint
     id: conversationId,
     body: {
       model: getSelectedModel(aiPreferences),
@@ -81,7 +87,7 @@ export function ChatInterface({
       organizationId: currentOrganization?.id,
       useCustomTokens: orgSettings?.aiSettings?.useCustomTokens || false,
       customTokens: orgSettings?.aiSettings?.customTokens,
-      systemPrompt: 'You are a helpful AI assistant.'
+      systemPrompt: 'You are a helpful AI assistant.',
     },
     onResponse: (response) => {
       // This is called when the API response starts streaming
@@ -110,6 +116,7 @@ export function ChatInterface({
         role: 'assistant',
         content: completion,
         createdAt: new Date().toISOString(),
+        type: 'text',
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -178,10 +185,11 @@ export function ChatInterface({
     }
   }, [messages, streamingMessage]);
 
+  const [aiService] = useState(() => new AIService());
+
   const handleSendMessage = async (content: string) => {
     if (isProcessing) return;
     
-    // Validate content before proceeding
     const trimmedContent = content.trim();
     if (!trimmedContent || trimmedContent.length === 0) {
       toast({
@@ -195,33 +203,29 @@ export function ChatInterface({
       setIsProcessing(true);
       setStreamError(null);
       
-      // Add user message to UI
       const userMessage: Message = {
         id: uuidv4(),
         role: 'user',
         content: trimmedContent,
         createdAt: new Date().toISOString(),
+        type: 'text',
       };
       
       setMessages((prev) => [...prev, userMessage]);
       
-      // Save user message to database
       await addMessageMutation.mutateAsync({
         conversationId,
         role: 'user',
         content: trimmedContent,
       });
       
-      // Prepare conversation history for context
       const conversationHistory = messages.map(msg => ({
         role: msg.role,
         content: msg.content,
       }));
       
-      // Get context settings from AI preferences
       const contextSettings = getContextSettings(aiPreferences);
       
-      // Apply context-aware prompting with enhanced context
       const enhancedPrompt = applyContextAwarePrompting({
         userPrompt: trimmedContent,
         systemPrompt: 'You are a helpful AI assistant.',
@@ -242,11 +246,9 @@ export function ChatInterface({
         }
       });
       
-      // Use the last message from the enhanced prompt (which contains the context-aware user message)
       const contextAwareMessage = enhancedPrompt[enhancedPrompt.length - 1].content;
       
-      // Use the AI SDK's complete function to send the message
-      await complete(contextAwareMessage, {
+      const response = await complete(contextAwareMessage, {
         body: {
           messages: enhancedPrompt.map(msg => ({
             role: msg.role as 'user' | 'assistant' | 'system',
@@ -261,6 +263,36 @@ export function ChatInterface({
           systemPrompt: 'You are a helpful AI assistant.'
         }
       });
+
+      // Check if the response indicates a dashboard should be shown
+      if (response && response.includes('SHOW_DASHBOARD')) {
+        const agent = new DashboardReportingAgent(aiService);
+        const dashboardMessage: Message = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: 'Generating dashboard...',
+          createdAt: new Date().toISOString(),
+          type: 'dashboard',
+          agent,
+        };
+        setMessages(prev => [...prev, dashboardMessage]);
+      } else {
+        // Handle regular message response
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: response || '',
+          createdAt: new Date().toISOString(),
+          type: 'text',
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        
+        await addMessageMutation.mutateAsync({
+          conversationId,
+          role: 'assistant',
+          content: assistantMessage.content,
+        });
+      }
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -278,6 +310,67 @@ export function ChatInterface({
     } else {
       router.push('/chat/new');
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isProcessing) return;
+
+    const userMessage: Message = {
+      id: uuidv4(),
+      role: 'user',
+      content: input,
+      createdAt: new Date().toISOString(),
+      type: 'text',
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsProcessing(true);
+
+    try {
+      // Let the orchestrator handle the message and determine if a dashboard is needed
+      await handleSendMessage(input);
+    } catch (error) {
+      console.error('Error processing message:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to process message',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const renderMessage = (message: Message) => {
+    if (message.type === 'dashboard' && message.agent) {
+      return (
+        <DashboardMessage
+          key={message.id}
+          messageId={message.id}
+          agent={message.agent}
+          onError={(error) => {
+            console.error('Dashboard error:', error);
+            // Handle dashboard error
+          }}
+          onUpdate={(data) => {
+            // Handle dashboard updates
+            console.log('Dashboard updated:', data);
+          }}
+        />
+      );
+    }
+
+    return (
+      <div
+        key={message.id}
+        className={`message ${
+          message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+        } rounded-lg p-4`}
+      >
+        {message.content}
+      </div>
+    );
   };
 
   return (
@@ -313,14 +406,7 @@ export function ChatInterface({
           </div>
         ) : (
           <div className="flex w-full flex-col">
-            {messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                role={message.role}
-                content={message.content}
-                timestamp={new Date(message.createdAt).toLocaleTimeString()}
-              />
-            ))}
+            {messages.map(renderMessage)}
             
             {streamingMessage && isProcessing && (
               <ChatMessage

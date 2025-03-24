@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Nuco Slack integration allows users to interact with the Nuco AI assistant directly from Slack. This integration provides a seamless way to access AI capabilities and prompt templates without leaving your Slack workspace.
+The Neuco Slack integration allows users to interact with the Neuco AI assistant directly from Slack. This integration provides a seamless way to access AI capabilities and prompt templates without leaving your Slack workspace.
 
 ## Features
 
@@ -10,22 +10,22 @@ The Nuco Slack integration allows users to interact with the Nuco AI assistant d
 
 - Secure OAuth 2.0 authentication flow
 - Token management with automatic refresh
-- Integration with the Nuco organization system
+- Integration with the Neuco organization system
 
 ### Bot Functionality
 
 - Event handling for messages and mentions
-- Slash commands for easy access to Nuco features
+- Slash commands for easy access to Neuco features
 - Interactive components for rich user interactions
 - Template integration for using prompt templates in Slack
 
 ### Commands
 
-The Nuco Slack bot supports the following slash commands:
+The Neuco Slack bot supports the following slash commands:
 
-- `/nuco help` - Display help information
-- `/nuco chat [message]` - Chat with the AI assistant
-- `/nuco templates` - List your available prompt templates
+- `/neuco help` - Display help information
+- `/neuco chat [message]` - Chat with the AI assistant
+- `/neuco templates` - List your available prompt templates
 
 ## Implementation Details
 
@@ -58,7 +58,7 @@ The Slack integration allows users to:
 ### Prerequisites
 
 - A Slack workspace where you have permission to add apps
-- A Nuco account with API access
+- A Neuco account with API access
 
 ### Configuration
 
@@ -66,24 +66,24 @@ The Slack integration allows users to:
 2. Configure the following:
    - Bot Token Scopes: `chat:write`, `channels:read`, `users:read`, etc.
    - Event Subscriptions: Point to your `/api/slack/bot` endpoint
-   - Slash Commands: Create a `/nuco` command pointing to your `/api/slack/bot` endpoint
+   - Slash Commands: Create a `/neuco` command pointing to your `/api/slack/bot` endpoint
    - OAuth & Permissions: Add your redirect URL as `/api/slack/oauth/callback`
 3. Install the app to your workspace
-4. In your Nuco account, go to Settings > Integrations and connect your Slack workspace
+4. In your Neuco account, go to Settings > Integrations and connect your Slack workspace
 
 ## Usage Examples
 
 ### Chatting with the AI
 
 ```
-/nuco chat What's the weather like in San Francisco today?
+/neuco chat What's the weather like in San Francisco today?
 ```
 
 ### Using a Template
 
 1. List templates:
 ```
-/nuco templates
+/neuco templates
 ```
 
 2. Click on "Use Template" for the desired template
