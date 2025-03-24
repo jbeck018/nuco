@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { generateCompletion } from '@/lib/ai/service';
 import { AIServiceError } from '@/lib/ai/error';
 import { AgentFactory } from '@/lib/ai/agents/factory';
 import { Message } from '@/lib/ai/service';
@@ -95,6 +94,9 @@ export async function POST(request: NextRequest): Promise<Response> {
       metadata: {
         userId: session.user.id,
         organizationId: validatedData.organizationId,
+        useCustomTokens: validatedData.useCustomTokens,
+        customTokens: validatedData.customTokens,
+        systemPrompt: validatedData.systemPrompt,
       },
       executionId: crypto.randomUUID(),
     };
@@ -102,22 +104,24 @@ export async function POST(request: NextRequest): Promise<Response> {
     // Execute the agent with the message
     const result = await agent.execute(context);
 
-    // Generate completion using the agent's output
-    const completion = await generateCompletion(
-      messages,
-      {
-        modelId: validatedData.model || 'gpt-4',
-        temperature: validatedData.temperature || 0.7,
-        maxTokens: validatedData.maxTokens || 1000,
-        organizationId: validatedData.organizationId,
-        useCustomTokens: validatedData.useCustomTokens,
-        customTokens: validatedData.customTokens,
-        systemPrompt: validatedData.systemPrompt,
-      }
-    );
-
     // Return streaming response
-    return completion.toDataStreamResponse();
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        if (typeof result.output === 'string') {
+          controller.enqueue(encoder.encode(result.output));
+        } else if (result.output && typeof result.output === 'object') {
+          controller.enqueue(encoder.encode(JSON.stringify(result.output)));
+        }
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
 
   } catch (error) {
     console.error('Agent API error:', error);

@@ -4,25 +4,23 @@
  * This file provides a unified interface for interacting with various AI providers.
  * It handles provider selection, message formatting, and response processing.
  */
-import { StreamTextResult, ToolSet, streamText } from 'ai';
-import { AIProvider, ModelConfig, getModelById } from './config';
-import { generateOpenAIStream, OpenAIFunction, OpenAIError, OpenAIErrorType } from './providers/openai';
-import { generateClaudeStream } from './providers/claude';
+import { StreamTextResult, ToolSet, streamText, LanguageModelV1, ToolChoice } from 'ai';
+import { AIProvider, getModelById } from './config';
 import { db } from '@/lib/db';
-import { sql, eq, and, gte, lte } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getOrganizationSettings } from '@/lib/metadata/service';
 import { organizationSettings } from '@/lib/db/schema/organization-settings';
 import { AIServiceError } from './error';
-import { formatMessages } from './utils';
 import { estimateTokenCount } from './tokenizer';
 import { AgentOrchestrator } from './agents/orchestrator';
 import { ChainService } from './service/chain-service';
 import { ChainConfig, AgentChain } from './agents/chain';
 import { Message, CompletionOptions } from './types';
-import { AgentContext, AgentState, AgentConfig } from './agents/base';
+import { AgentContext } from './agents/base';
 import crypto from 'crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { AgentFactory } from './agents/factory';
 
 /**
  * Maximum number of retry attempts for rate-limited requests
@@ -80,7 +78,7 @@ export async function generateCompletion(
   retryCount = 0
 ): Promise<StreamTextResult<ToolSet, never>> {
   // Get the model configuration
-  const modelId = options.modelId;
+  const modelId = options.modelId || 'gpt-4'; // Provide default model ID
   const modelConfig = getModelById(modelId);
   
   if (!modelConfig) {
@@ -99,92 +97,113 @@ export async function generateCompletion(
       );
     }
   }
-  
-  // Apply custom options to the model configuration
-  const customizedConfig: ModelConfig = {
-    ...modelConfig,
-    temperature: options.temperature ?? modelConfig.temperature,
-    topP: options.topP ?? modelConfig.topP,
-    frequencyPenalty: options.frequencyPenalty ?? modelConfig.frequencyPenalty,
-    presencePenalty: options.presencePenalty ?? modelConfig.presencePenalty,
-    maxOutputTokens: options.maxTokens ?? modelConfig.maxOutputTokens,
+
+  // Create agent factory instance
+  const agentFactory = AgentFactory.getInstance({
+    defaultModelId: modelId,
+    defaultSystemPrompt: options.systemPrompt || '',
+    metadata: {
+      organizationId: options.organizationId,
+    },
+  });
+
+  // Create a default agent
+  const agent = await agentFactory.createAgent('default', {
+    modelConfig: {
+      id: modelId,
+      name: modelConfig.name || 'Default Model',
+      provider: modelConfig.provider,
+      contextWindow: modelConfig.contextWindow || 4096,
+      maxOutputTokens: options.maxTokens || modelConfig.maxOutputTokens || 2048,
+      temperature: options.temperature || modelConfig.temperature || 0.7,
+      topP: options.topP || modelConfig.topP || 1,
+      frequencyPenalty: options.frequencyPenalty || modelConfig.frequencyPenalty || 0,
+      presencePenalty: options.presencePenalty || modelConfig.presencePenalty || 0,
+      costPer1kInput: modelConfig.costPer1kInput || 0.01,
+      costPer1kOutput: modelConfig.costPer1kOutput || 0.03,
+    },
+  });
+
+  // Convert messages to the correct type
+  const formattedMessages = messages.map(msg => ({
+    id: crypto.randomUUID(),
+    role: msg.role,
+    content: msg.content,
+    createdAt: new Date(),
+  }));
+
+  // Create agent context
+  const context: AgentContext = {
+    messages: formattedMessages,
+    state: {
+      id: crypto.randomUUID(),
+      status: 'running',
+      lastUpdated: new Date(),
+      metadata: {},
+    },
+    config: {
+      id: crypto.randomUUID(),
+      name: 'default',
+      description: 'Default agent for handling completions',
+      model: modelId,
+      aiService: new AIService(),
+    },
+    metadata: {
+      organizationId: options.organizationId,
+      useCustomTokens: options.useCustomTokens,
+      customTokens: options.customTokens,
+      systemPrompt: options.systemPrompt,
+      functions: options.functions,
+      tokenUsage: {
+        promptTokens: 0,
+        completionTokens: 0,
+      },
+    },
+    executionId: crypto.randomUUID(),
   };
-  
-  // Format messages for the API
-  const formattedMessages = formatMessages(messages, options.systemPrompt);
-  
-  // Estimate input tokens
-  const estimatedInputTokens = await estimateTokenCount(
-    formattedMessages.map(m => m.content).join(' '), 
-    modelConfig.provider
-  );
-  
+
   try {
-    // Check if custom tokens should be used
-    const providerApiKey = options.useCustomTokens && options.customTokens 
-      ? options.customTokens[modelConfig.provider] 
-      : undefined;
-    
-    // Generate the completion based on the provider
-    let result: StreamTextResult<ToolSet, never>;
-    
-    switch (modelConfig.provider) {
-      case 'openai':
-        result = await generateOpenAIStream(
-          formattedMessages, 
-          customizedConfig, 
-          options.functions,
-          providerApiKey
-        );
-        break;
-      case 'anthropic':
-        result = await generateClaudeStream(
-          formattedMessages, 
-          customizedConfig,
-          providerApiKey
-        );
-        break;
-      case 'google':
-        // TODO: Implement Google provider
-        throw new AIServiceError('Google provider not implemented yet', 'google', 'not_implemented');
-      case 'custom':
-        // TODO: Implement custom provider
-        throw new AIServiceError('Custom provider not implemented yet', 'custom', 'not_implemented');
-      default:
-        throw new AIServiceError(`Unsupported provider: ${modelConfig.provider}`, 'custom', 'invalid_provider');
-    }
-    
+    // Execute the agent
+    const result = await agent.execute(context);
+
     // Track token usage if organization ID is provided and not using custom tokens
-    if (options.organizationId && !options.useCustomTokens) {
-      // We'll update the token usage asynchronously to avoid blocking the response
-      // Estimate output tokens (this is approximate)
-      const estimatedOutputTokens = Math.ceil((customizedConfig.maxOutputTokens || 2000) * 0.7); // Assume 70% usage
-      const totalTokens = estimatedInputTokens + estimatedOutputTokens;
+    if (options.organizationId && !options.useCustomTokens && result.metadata?.tokenUsage) {
+      const tokenUsage = result.metadata.tokenUsage as { promptTokens?: number; completionTokens?: number };
+      const totalTokens = (tokenUsage.promptTokens || 0) + (tokenUsage.completionTokens || 0);
       
       // Update token usage in the background
       updateTokenUsage(options.organizationId, totalTokens)
         .catch(error => console.error('Error updating token usage:', error));
     }
-    
-    return result;
+
+    // Create the appropriate provider client based on the model ID
+    const provider = modelId.startsWith('gpt') ? 'openai' : 'anthropic';
+    const client = provider === 'openai' 
+      ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    // Return streaming response with proper configuration
+    return streamText({
+      model: client(modelId),
+      messages: formattedMessages.map(msg => ({
+        role: msg.role,
+        content: typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
+      })),
+      temperature: options.temperature || 0.7,
+      maxTokens: options.maxTokens || 1000,
+      topP: options.topP || 1,
+    });
+
   } catch (error) {
     // Handle provider-specific errors
-    if (error instanceof OpenAIError) {
-      // Convert OpenAI errors to generic AI service errors
-      const serviceError = new AIServiceError(
-        error.message,
-        'openai',
-        error.type
-      );
-      serviceError.retryAfter = error.retryAfter;
-
+    if (error instanceof AIServiceError) {
       // Handle rate limit errors with retry logic
-      if (error.type === OpenAIErrorType.RATE_LIMIT && retryCount < MAX_RETRY_ATTEMPTS) {
+      if (error.code === 'rate_limit_exceeded' && retryCount < MAX_RETRY_ATTEMPTS) {
         const delay = error.retryAfter
           ? error.retryAfter * 1000 // Convert seconds to milliseconds
           : calculateExponentialBackoff(retryCount);
           
-        console.warn(`Rate limited by OpenAI. Retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+        console.warn(`Rate limited. Retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
         
         // Wait for the specified delay
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -193,7 +212,7 @@ export async function generateCompletion(
         return generateCompletion(messages, options, retryCount + 1);
       }
       
-      throw serviceError;
+      throw error;
     } else if (error instanceof Error) {
       throw new AIServiceError(error.message, modelConfig.provider, 'unknown');
     } else {

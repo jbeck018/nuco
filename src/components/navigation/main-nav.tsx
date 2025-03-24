@@ -147,8 +147,8 @@ export function MainNav({ children }: MainNavProps) {
         description: "You have been signed out of your account.",
       });
       
-      // Redirect to home page after sign out
-      router.push('/');
+      // Redirect to login page after sign out
+      router.push('/auth/login');
     } catch (error) {
       console.error("Sign out error:", error);
       toast({
@@ -229,7 +229,7 @@ export function MainNav({ children }: MainNavProps) {
         <nav className="border-b bg-background z-10 h-14">
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
+              <Link href={isAuthenticated ? "/dashboard" : "/auth/login"} className="flex items-center space-x-2">
                 <span className="text-xl font-bold">Neuco</span>
               </Link>
             </div>
@@ -369,7 +369,7 @@ export function MainNav({ children }: MainNavProps) {
       <nav className="border-b bg-background">
         <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
+            <Link href={isAuthenticated ? "/dashboard" : "/auth/login"} className="flex items-center space-x-2">
               <span className="text-xl font-bold">Neuco</span>
             </Link>
           </div>
