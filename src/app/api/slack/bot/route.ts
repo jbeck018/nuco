@@ -6,6 +6,9 @@ import { NeucoAgent } from '@/lib/ai/agents/slack/neuco-agent';
 import { AIService } from '@/lib/ai/service';
 import { z } from 'zod';
 
+// Configure Edge Runtime
+export const runtime = 'edge';
+
 // Create services
 const analyticsService = createSlackAnalyticsService();
 
