@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { 
-  Menu, X, Home, MessageSquare, Settings, LogOut, 
-  Layers, Key, Code, FileText, ChevronRight, ChevronLeft 
+  Menu, X, MessageSquare, Settings, LogOut, 
+  Layers, Key, Code, FileText, ChevronRight, ChevronLeft, 
+  Home
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -68,11 +69,6 @@ export function MainNav({ children }: MainNavProps) {
   }, []);
   
   const navItems: NavItem[] = [
-    {
-      title: "Home",
-      href: "/",
-      icon: <Home className="h-5 w-5" />,
-    },
     {
       title: "Dashboard",
       href: "/dashboard",
