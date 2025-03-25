@@ -48,6 +48,10 @@ export class ConsistencyAuditor extends BaseAgent {
     const executionId = crypto.randomUUID();
 
     try {
+      if (!this.config.id) {
+        throw new AIServiceError('Agent ID is required for execution');
+      }
+
       // Create execution record
       await db.insert(agentExecutions).values({
         id: executionId,

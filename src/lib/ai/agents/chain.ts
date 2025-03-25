@@ -124,8 +124,7 @@ export class AgentChain extends EventEmitter {
         : context;
 
       // Execute agent
-      const result = await this.orchestrator.executeAgent(
-        step.agentId,
+      const result = await this.orchestrator.executeTask(
         transformedContext,
         this.config.steps.length - stepIndex // Higher priority for later steps
       );
