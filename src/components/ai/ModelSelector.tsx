@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 // Import the AI config types and models
-import { ModelConfig, openAIModels, anthropicModels } from '@/lib/ai/config';
+import { openAIModels, anthropicModels } from '@/lib/ai/config';
 // Import the AI preferences hook
 import { useAiPreferences } from '@/hooks/useAiPreferences';
 import { getSelectedModel, getDefaultModel } from '@/lib/utils/ai-utils';

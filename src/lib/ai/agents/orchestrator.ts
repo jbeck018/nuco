@@ -4,12 +4,15 @@ import { CacheManager, CacheConfig } from './cache';
 import { AIServiceError } from '../error';
 import { EventEmitter } from 'events';
 import { generateCompletion } from '../service';
-import { StreamTextResult, ToolSet } from 'ai';
-import { db } from '@/lib/db';
-import { agents, agentExecutions, type Agent } from '@/lib/db/schema/agents';
-import { eq } from 'drizzle-orm';
+import { StreamTextResult, ToolSet, Message } from 'ai';
 import { AIService } from '../service';
 import { AgentFactory } from './factory';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { streamText } from 'ai';
+import { ModelConfig } from '../config';
+
+const DEFAULT_AGENT_ID = '00000000-0000-4000-8000-000000000001'; // Consistent UUID for default agent
 
 export interface AgentRegistration {
   id: string;
@@ -30,6 +33,15 @@ export interface AgentRegistration {
     timeout?: number;
     retryable?: boolean;
     edgeCompatible?: boolean;  // Whether the agent can run in edge environment
+  };
+  swarmRole: 'worker' | 'coordinator' | 'specialist';
+  swarmMetadata: {
+    specialization?: string[];
+    taskPreference?: string[];
+    performance?: {
+      successRate: number;
+      avgResponseTime: number;
+    };
   };
 }
 
@@ -80,8 +92,31 @@ export interface OrchestratorConfig {
   recoveryConfig?: Partial<RecoveryConfig>;
 }
 
+export interface SwarmTask {
+  id: string;
+  type: string;
+  priority: number;
+  context: AgentContext;
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'failed';
+  assignedAgent?: string;
+  results: AgentResult[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SwarmMetrics {
+  activeAgents: number;
+  pendingTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  avgResponseTime: number;
+  successRate: number;
+  agentUtilization: Record<string, number>;
+}
+
 export class AgentOrchestrator extends EventEmitter {
   private agents: Map<string, AgentRegistration> = new Map();
+  private tasks: Map<string, SwarmTask> = new Map();
   private resources: ResourceAllocation;
   private config: OrchestratorConfig;
   private taskQueue: Array<{
@@ -95,6 +130,10 @@ export class AgentOrchestrator extends EventEmitter {
   private requestCount: number = 0;
   private cacheManager: CacheManager;
   private recoveryManager: RecoveryManager;
+  private readonly MAX_QUEUE_SIZE = 50;
+  private readonly MAX_MESSAGE_HISTORY = 5;
+  private readonly MAX_CONCURRENT_TASKS = 10;
+  private readonly MAX_TASK_QUEUE = 100;
 
   constructor(config: OrchestratorConfig) {
     super();
@@ -137,12 +176,27 @@ export class AgentOrchestrator extends EventEmitter {
     this.cacheManager = new CacheManager({
       enabled: true,
       defaultTTL: 300, // 5 minutes default
-      maxSize: 100,    // Reduced for Pages
-      maxMemory: 32,   // Reduced for Pages
+      maxSize: 50,     // Reduced for Pages
+      maxMemory: 16,   // Reduced for Pages
       compression: true,
       ...config.cacheConfig
     });
     this.recoveryManager = new RecoveryManager(this.config.recoveryConfig);
+  }
+
+  private performGarbageCollection(): void {
+    // Clear completed agent states
+    for (const [id, registration] of this.agents.entries()) {
+      if (registration.state.status === 'completed') {
+        registration.state.metadata = {};
+        registration.agent.cleanup();
+      }
+    }
+
+    // Clear old tasks if queue is too large
+    if (this.taskQueue.length > this.MAX_QUEUE_SIZE) {
+      this.taskQueue = this.taskQueue.slice(-this.MAX_QUEUE_SIZE);
+    }
   }
 
   async initialize(): Promise<void> {
@@ -154,54 +208,6 @@ export class AgentOrchestrator extends EventEmitter {
   async registerAgent(agent: BaseAgent, config: ExtendedAgentConfig, dependencies: string[] = []): Promise<void> {
     const id = config.id || crypto.randomUUID();
     
-    // First check if agent already exists in database
-    const existingAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, id)
-    }) as Agent | undefined;
-
-    if (existingAgent) {
-      // If agent exists, just update its state and register in memory
-      await db.update(agents)
-        .set({
-          state: {
-            status: 'idle',
-            lastUpdated: new Date(),
-            metadata: {}
-          },
-          updatedAt: new Date()
-        })
-        .where(eq(agents.id, id));
-
-      const agentMetadata = existingAgent.metadata as {
-        capabilities: AgentRegistration['capabilities'];
-        resources: AgentRegistration['resources'];
-      };
-
-      // Register in memory
-      this.agents.set(id, {
-        id,
-        agent,
-        config,
-        state: {
-          id: crypto.randomUUID(),
-          status: 'idle',
-          lastUpdated: new Date(),
-          metadata: {},
-        },
-        dependencies,
-        resources: agentMetadata.resources,
-        capabilities: agentMetadata.capabilities
-      });
-
-      this.emit('agentRegistered', { 
-        id, 
-        config, 
-        capabilities: agentMetadata.capabilities 
-      });
-      
-      return;
-    }
-
     // Validate dependencies
     for (const depId of dependencies) {
       if (!this.agents.has(depId)) {
@@ -230,35 +236,17 @@ export class AgentOrchestrator extends EventEmitter {
       custom: {}
     };
 
-    // Register new agent in database
-    await db.insert(agents).values({
-      id,
-      name: config.name || 'Default Agent',
-      description: config.description || 'Auto-registered agent',
-      type: config.type || 'default',
-      config: {
-        ...config,
-        // Remove circular references before storing
-        aiService: undefined
-      },
-      state: {
-        status: 'idle',
-        lastUpdated: new Date(),
-        metadata: {}
-      },
-      metadata: {
-        capabilities,
-        resources,
-        dependencies
-      },
-      isActive: true
-    });
+    // Determine swarm role based on agent type and capabilities
+    const swarmRole = this.determineSwarmRole(config, capabilities);
 
-    // Register agent in memory
+    // Register agent in memory with minimal metadata
     this.agents.set(id, {
       id,
       agent,
-      config,
+      config: {
+        ...config,
+        metadata: {} // Clear metadata to save memory
+      },
       state: {
         id: crypto.randomUUID(),
         status: 'idle',
@@ -267,10 +255,39 @@ export class AgentOrchestrator extends EventEmitter {
       },
       dependencies,
       resources,
-      capabilities
+      capabilities,
+      swarmRole,
+      swarmMetadata: {
+        specialization: config.type ? [config.type] : [],
+        taskPreference: [],
+        performance: {
+          successRate: 1.0,
+          avgResponseTime: 0
+        }
+      }
     });
 
-    this.emit('agentRegistered', { id, config, capabilities });
+    this.emit('agentRegistered', { 
+      id, 
+      config: { ...config, metadata: {} }, 
+      capabilities,
+      swarmRole
+    });
+  }
+
+  private determineSwarmRole(config: ExtendedAgentConfig, capabilities: AgentRegistration['capabilities']): AgentRegistration['swarmRole'] {
+    // Specialized agents become specialists
+    if (config.type && config.type !== 'default') {
+      return 'specialist';
+    }
+    
+    // Agents with high concurrency become coordinators
+    if (capabilities.maxConcurrentExecutions && capabilities.maxConcurrentExecutions > 5) {
+      return 'coordinator';
+    }
+    
+    // Default to worker
+    return 'worker';
   }
 
   /**
@@ -278,7 +295,14 @@ export class AgentOrchestrator extends EventEmitter {
    */
   private async selectAgent(context: AgentContext): Promise<string> {
     const lastMessage = context.messages[context.messages.length - 1];
-    if (!lastMessage) return crypto.randomUUID(); // Generate UUID for default case
+    if (!lastMessage) return DEFAULT_AGENT_ID;
+
+    // If this is a completion request (indicated by metadata), skip agent selection
+    if (context.metadata.isCompletionRequest) {
+      // Return first available agent or default
+      const firstAgent = this.agents.values().next().value;
+      return firstAgent ? firstAgent.id : DEFAULT_AGENT_ID;
+    }
 
     // Get all available agents and their descriptions
     const agentDescriptions = Array.from(this.agents.entries()).map(([id, registration]) => ({
@@ -288,9 +312,9 @@ export class AgentOrchestrator extends EventEmitter {
       capabilities: registration.capabilities
     }));
 
-    // If no agents are registered, return a default UUID
+    // If no agents are registered, return default
     if (agentDescriptions.length === 0) {
-      return crypto.randomUUID();
+      return DEFAULT_AGENT_ID;
     }
 
     // Create a prompt for the LLM to analyze the query and select the best agent
@@ -303,26 +327,31 @@ User query: "${lastMessage.content}"
 
 Based on the user's query and the available agents, which agent would be most appropriate to handle this request? 
 Consider the agent's description and capabilities when making your decision.
-If no specialized agent is needed, respond with the ID of the first agent.
+If no specialized agent is needed, respond with '${DEFAULT_AGENT_ID}'.
 
 Respond with ONLY the agent ID, nothing else.`;
 
     try {
-      // Use the AI service to get the agent selection using the model from context
-      const result = await generateCompletion(
-        [{ 
-          role: 'system', 
-          content: prompt,
-        }],
-        {
-          modelId: context.config.model,
-          temperature: 0.1, // Low temperature for consistent selection
-          maxTokens: 50,
-          organizationId: context.metadata.organizationId as string | undefined,
-          useCustomTokens: context.metadata.useCustomTokens as boolean | undefined,
-          customTokens: context.metadata.customTokens as Record<string, string> | undefined,
-        }
-      );
+      // Use a simpler completion call without recursion
+      const messages: Message[] = [{ 
+        role: 'system',
+        content: prompt,
+        id: crypto.randomUUID()
+      }];
+
+      // Use the provider-specific completion directly
+      const provider = context.config.model.startsWith('gpt') ? 'openai' : 'anthropic';
+      const client = provider === 'openai' 
+        ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+        : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+      const result = await streamText({
+        model: client(context.config.model),
+        messages,
+        temperature: 0.1, // Low temperature for consistent selection
+        maxTokens: 50,
+        topP: 1
+      });
 
       // Convert the stream to text
       const text = await this.streamToString(result);
@@ -340,12 +369,11 @@ Respond with ONLY the agent ID, nothing else.`;
         return firstAgent.id;
       }
 
-      // If no agents are available, generate a new UUID
-      return crypto.randomUUID();
+      return DEFAULT_AGENT_ID;
     } catch (error) {
       console.error('Error selecting agent:', error);
-      // Generate a new UUID if agent selection fails
-      return crypto.randomUUID();
+      // Return default if agent selection fails
+      return DEFAULT_AGENT_ID;
     }
   }
 
@@ -370,315 +398,303 @@ Respond with ONLY the agent ID, nothing else.`;
     return result;
   }
 
-  async executeAgent(agentId: string, context: AgentContext, priority: number = 0): Promise<AgentResult> {
-    // If this is already a default agent execution, don't try to select another agent
-    if (agentId === 'default') {
-      const registration = this.agents.get(agentId);
-      if (registration) {
-        return this.executeAgentInternal(registration, context, priority);
-      }
+  async executeTask(context: AgentContext, priority: number = 0): Promise<AgentResult> {
+    const taskId = crypto.randomUUID();
+    const task: SwarmTask = {
+      id: taskId,
+      type: this.determineTaskType(context),
+      priority,
+      context,
+      status: 'pending',
+      results: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    this.tasks.set(taskId, task);
+    this.emit('taskCreated', task);
+
+    // Start swarm processing if not already running
+    if (!this.isProcessing) {
+      this.processSwarm();
     }
-
-    // Use LLM to select the most appropriate agent
-    const selectedAgentId = await this.selectAgent(context);
-    
-    // Get the selected agent
-    const registration = this.agents.get(selectedAgentId);
-    if (!registration) {
-      // Create default agent capabilities
-      const defaultCapabilities = {
-        requiresStorage: false,
-        maxConcurrentExecutions: 1,
-        timeout: 30000,
-        retryable: true,
-        edgeCompatible: true
-      };
-
-      // Create default agent resources
-      const defaultResources = {
-        memory: 64,  // Default memory allocation
-        cpu: 1,      // Default CPU allocation
-        network: 10, // Default network allocation
-        storage: 0,  // No storage by default
-        custom: {}
-      };
-
-      const defaultAgentId = 'default';
-      
-      // Create AIService instance
-      const aiService = new AIService();
-      await aiService.initialize({
-        modelId: context.config.model,
-        organizationId: context.metadata.organizationId as string
-      });
-
-      // Create agent factory instance with AIService
-      const agentFactory = AgentFactory.getInstance({
-        defaultModelId: context.config.model,
-        defaultSystemPrompt: context.config.systemPrompt,
-        metadata: context.metadata,
-      }, aiService);
-
-      // Create default agent through factory
-      const defaultAgent = await agentFactory.createAgent('default', {
-        id: defaultAgentId,
-        name: 'Default Agent',
-        description: 'Handles general chat responses',
-        model: context.config.model,
-        aiService: aiService,
-      });
-
-      // Register the agent in the database first
-      await db.insert(agents).values({
-        id: defaultAgentId,
-        name: 'Default Agent',
-        description: 'Handles general chat responses',
-        type: 'default',
-        config: {
-          model: context.config.model,
-        },
-        state: {
-          status: 'idle',
-          lastUpdated: new Date(),
-          metadata: {}
-        },
-        metadata: {
-          capabilities: defaultCapabilities,
-          resources: defaultResources,
-          dependencies: []
-        },
-        isActive: true
-      });
-
-      // Then register with the orchestrator
-      await this.registerAgent(defaultAgent, {
-        id: defaultAgentId,
-        name: 'Default Agent',
-        description: 'Handles general chat responses',
-        model: context.config.model,
-        aiService: aiService,
-        type: 'default'
-      });
-
-      return this.executeAgentInternal(this.agents.get(defaultAgentId)!, context, priority);
-    }
-
-    return this.executeAgentInternal(registration, context, priority);
-  }
-
-  private async executeAgentInternal(
-    registration: AgentRegistration,
-    context: AgentContext,
-    priority: number
-  ): Promise<AgentResult> {
-    // Check request limits
-    if (this.requestCount >= (this.config.pagesConfig?.maxRequests || 0)) {
-      throw new AIServiceError('Maximum concurrent requests reached');
-    }
-
-    this.requestCount++;
 
     try {
-      // Generate cache key based on agent ID and context
-      const cacheKey = this.generateCacheKey(registration.id, context);
-
-      // Try to get from cache first
-      const cachedResult = await this.cacheManager.get<AgentResult>(cacheKey);
-      if (cachedResult) {
-        return cachedResult;
+      // Process the task directly
+      await this.processTask(task);
+      
+      // Return the last result from the task
+      const lastResult = task.results[task.results.length - 1];
+      if (!lastResult) {
+        throw new AIServiceError('No results were generated for the task');
       }
-
-      // Check dependencies
-      for (const depId of registration.dependencies) {
-        const depRegistration = this.agents.get(depId);
-        if (depRegistration?.state.status !== 'completed') {
-          throw new AIServiceError(`Dependency agent ${depId} not completed`);
-        }
-      }
-
-      // Add to task queue
-      this.taskQueue.push({
-        agentId: registration.id,
-        context,
-        priority,
-        timestamp: Date.now(),
-      });
-
-      // Sort queue by priority and timestamp
-      this.taskQueue.sort((a, b) => {
-        if (a.priority !== b.priority) return b.priority - a.priority;
-        return a.timestamp - b.timestamp;
-      });
-
-      // Start processing if not already running
-      if (!this.isProcessing) {
-        this.processTaskQueue();
-      }
-
-      // Wait for completion with Pages function timeout
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new AIServiceError(`Agent ${registration.id} execution timed out`));
-        }, (this.config.pagesConfig?.maxDuration || 30) * 1000);
-
-        this.once(`agentCompleted:${registration.id}`, async (result) => {
-          clearTimeout(timeout);
-          // Cache the result
-          await this.cacheManager.set(cacheKey, result, 300); // 5 minute TTL
-          resolve(result);
-        });
-
-        this.once(`agentFailed:${registration.id}`, (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-      });
+      
+      return lastResult;
     } catch (error) {
-      const recoveryContext = {
-        agentId: registration.id,
-        executionId: context.executionId,
-        attempt: context.attempt || 0,
-        lastError: error instanceof Error ? error : new Error(String(error)),
-        state: registration.state
-      };
-
-      try {
-        const result = await this.recoveryManager.recover(error instanceof Error ? error : new Error(String(error)), recoveryContext);
-        if (result) {
-          return result;
-        }
-      } catch (recoveryError) {
-        console.error('Recovery failed:', recoveryError);
-      }
-
-      throw error;
-    } finally {
-      this.requestCount--;
-    }
-  }
-
-  private generateCacheKey(agentId: string, keyData: Record<string, any>): string {
-    // Generate a deterministic cache key using UUID
-    return `agent:${agentId}:${crypto.randomUUID()}`;
-  }
-
-  private async processTaskQueue(): Promise<void> {
-    if (this.isProcessing || this.taskQueue.length === 0) return;
-
-    this.isProcessing = true;
-
-    while (this.taskQueue.length > 0) {
-      const task = this.taskQueue[0];
-      const registration = this.agents.get(task.agentId);
-      if (!registration) {
-        this.taskQueue.shift();
-        continue;
-      }
-
-      // Check if agent is edge compatible
-      if (!registration.capabilities.edgeCompatible) {
-        console.warn(`Agent ${task.agentId} is not edge compatible and may have performance issues`);
-      }
-
-      // Check resource availability
-      if (!this.hasAvailableResources(registration.resources)) {
-        await new Promise(resolve => setTimeout(resolve, 50)); // Reduced wait time for Pages
-        continue;
-      }
-
-      // Allocate resources
-      this.allocateResources(registration.resources);
-
-      // Create execution record
-      const executionId = crypto.randomUUID();
-      await db.insert(agentExecutions).values({
-        id: executionId,
-        agentId: task.agentId,
-        status: 'running',
-        startedAt: new Date(),
-        input: task.context
-      });
-
-      try {
-        // Update agent state
-        registration.state.status = 'running';
-        registration.state.lastUpdated = new Date();
-
-        // Execute agent with Pages function timeout
-        const timeout = Math.min(
-          registration.capabilities.timeout || 30000,
-          this.config.pagesConfig?.maxDuration ? this.config.pagesConfig.maxDuration * 1000 : 30000
-        );
-        
-        const result = await Promise.race([
-          registration.agent.execute(task.context),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new AIServiceError('Agent execution timed out')), timeout)
-          )
-        ]);
-
-        // Update execution record
-        await db
-          .update(agentExecutions)
-          .set({
-            status: 'completed',
-            completedAt: new Date(),
-            output: { data: result }
-          })
-          .where(eq(agentExecutions.id, executionId));
-
-        // Update agent state
-        registration.state.status = 'completed';
-        registration.state.lastUpdated = new Date();
-
-        // Emit completion event
-        this.emit(`agentCompleted:${task.agentId}`, result);
-      } catch (error) {
-        // Update execution record
-        await db
-          .update(agentExecutions)
-          .set({
-            status: 'failed',
-            completedAt: new Date(),
-            output: { error: error instanceof Error ? error : new Error(String(error)) }
-          })
-          .where(eq(agentExecutions.id, executionId));
-
-        // Update agent state
-        registration.state.status = 'failed';
-        registration.state.lastUpdated = new Date();
-
-        // Emit failure event
-        this.emit(`agentFailed:${task.agentId}`, error instanceof Error ? error : new Error(String(error)));
-
+      // If the error is already an AIServiceError, rethrow it
+      if (error instanceof AIServiceError) {
         throw error;
       }
+      
+      // Create a new AIServiceError with the error information
+      const aiError = new AIServiceError(
+        error instanceof Error ? error.message : String(error),
+        context.config.modelConfig?.provider || 'unknown',
+        'unknown',
+        error instanceof Error && 'status' in error ? (error as any).status : undefined
+      );
+      throw aiError;
     }
   }
 
-  private hasAvailableResources(resources: {
-    memory: number;
-    cpu: number;
-    network: number;
-  }): boolean {
-    return (
-      this.resources.available.memory >= resources.memory &&
-      this.resources.available.cpu >= resources.cpu &&
-      this.resources.available.network >= resources.network
-    );
+  private determineTaskType(context: AgentContext): string {
+    // Analyze context to determine task type
+    const lastMessage = context.messages[context.messages.length - 1];
+    if (!lastMessage) return 'general';
+
+    // Simple task type determination based on message content
+    const content = lastMessage.content.toLowerCase();
+    if (content.includes('analyze') || content.includes('analysis')) return 'analysis';
+    if (content.includes('research') || content.includes('search')) return 'research';
+    if (content.includes('generate') || content.includes('create')) return 'generation';
+    return 'general';
   }
 
-  private allocateResources(resources: {
-    memory: number;
-    cpu: number;
-    network: number;
-  }): void {
-    this.resources.allocated.memory += resources.memory;
-    this.resources.allocated.cpu += resources.cpu;
-    this.resources.allocated.network += resources.network;
-    this.resources.available.memory -= resources.memory;
-    this.resources.available.cpu -= resources.cpu;
-    this.resources.available.network -= resources.network;
+  private async processSwarm(): Promise<void> {
+    if (this.isProcessing || this.tasks.size === 0) return;
+    this.isProcessing = true;
+
+    try {
+      // Get pending tasks
+      const pendingTasks = Array.from(this.tasks.values())
+        .filter(task => task.status === 'pending')
+        .sort((a, b) => b.priority - a.priority);
+
+      // Process tasks in parallel with concurrency limit
+      const taskBatches = this.chunkArray(pendingTasks, this.MAX_CONCURRENT_TASKS);
+      
+      for (const batch of taskBatches) {
+        await Promise.all(batch.map(task => this.processTask(task)));
+      }
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async processTask(task: SwarmTask): Promise<void> {
+    try {
+      // Find suitable agents for the task
+      const suitableAgents = this.findSuitableAgents(task);
+      
+      if (suitableAgents.length === 0) {
+        // Instead of throwing an error, mark the task for direct LLM completion
+        task.status = 'completed';
+        task.results.push({
+          success: true,
+          output: null,
+          metadata: {
+            fallbackToDirectLLM: true,
+            messages: task.context.messages,
+            model: task.context.config.model,
+            modelConfig: task.context.config.modelConfig
+          }
+        });
+        task.updatedAt = new Date();
+        this.emit(`taskCompleted:${task.id}`, task.results[0]);
+        return;
+      }
+
+      // Select best agent based on performance metrics
+      const selectedAgent = this.selectBestAgent(suitableAgents, task);
+      
+      // Update task status
+      task.status = 'in_progress';
+      task.assignedAgent = selectedAgent.id;
+      task.updatedAt = new Date();
+
+      // Ensure model configuration is properly passed to the agent
+      const agentContext: AgentContext = {
+        ...task.context,
+        config: {
+          ...task.context.config,
+          modelConfig: task.context.config.modelConfig || task.context.metadata.modelConfig as ModelConfig
+        }
+      };
+
+      // Execute agent with updated context
+      const result = await selectedAgent.agent.execute(agentContext);
+      
+      // Update task with result
+      task.status = 'completed';
+      task.results.push(result);
+      task.updatedAt = new Date();
+
+      // Update agent performance metrics
+      this.updateAgentPerformance(selectedAgent.id, result);
+
+      // Emit completion event
+      this.emit(`taskCompleted:${task.id}`, result);
+    } catch (error) {
+      // Update task status and add error result
+      task.status = 'failed';
+      task.updatedAt = new Date();
+      
+      // Create error result with detailed information
+      const errorResult: AgentResult = {
+        success: false,
+        output: null,
+        error: error instanceof Error ? error : new Error(String(error)),
+        metadata: {
+          model: task.context.config.model,
+          modelConfig: task.context.config.modelConfig,
+          agentId: task.assignedAgent,
+          errorType: error instanceof Error ? error.name : 'Unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined
+        }
+      };
+      
+      task.results.push(errorResult);
+      
+      // Emit failure event with the error result
+      this.emit(`taskFailed:${task.id}`, errorResult.error);
+      throw errorResult.error;
+    }
+  }
+
+  private findSuitableAgents(task: SwarmTask): AgentRegistration[] {
+    return Array.from(this.agents.values()).filter(agent => {
+      // Check if agent is idle
+      if (agent.state.status !== 'idle') return false;
+      
+      // Check specialization match
+      if (task.type !== 'general' && 
+          agent.swarmMetadata.specialization && 
+          !agent.swarmMetadata.specialization.includes(task.type)) {
+        return false;
+      }
+      
+      // Check task preference
+      if (agent.swarmMetadata.taskPreference && 
+          !agent.swarmMetadata.taskPreference.includes(task.type)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+
+  private selectBestAgent(agents: AgentRegistration[], task: SwarmTask): AgentRegistration {
+    // Sort agents by performance metrics
+    return agents.sort((a, b) => {
+      const aScore = this.calculateAgentScore(a, task);
+      const bScore = this.calculateAgentScore(b, task);
+      return bScore - aScore;
+    })[0];
+  }
+
+  private calculateAgentScore(agent: AgentRegistration, task: SwarmTask): number {
+    let score = 0;
+    
+    // Ensure performance metrics exist
+    const performance = agent.swarmMetadata.performance || {
+      successRate: 1.0,
+      avgResponseTime: 0
+    };
+    
+    // Consider success rate
+    score += performance.successRate * 0.4;
+    
+    // Consider response time (inverse)
+    const maxResponseTime = 10000; // 10 seconds
+    const responseTimeScore = Math.max(0, 1 - (performance.avgResponseTime / maxResponseTime));
+    score += responseTimeScore * 0.3;
+    
+    // Consider specialization match
+    if (agent.swarmMetadata.specialization?.includes(task.type)) {
+      score += 0.3;
+    }
+    
+    return score;
+  }
+
+  private updateAgentPerformance(agentId: string, result: AgentResult): void {
+    const agent = this.agents.get(agentId);
+    if (!agent) return;
+
+    // Ensure performance metrics exist
+    if (!agent.swarmMetadata.performance) {
+      agent.swarmMetadata.performance = {
+        successRate: 1.0,
+        avgResponseTime: 0
+      };
+    }
+
+    const performance = agent.swarmMetadata.performance;
+    const now = Date.now();
+    
+    // Update success rate
+    performance.successRate = (performance.successRate * 0.9) + (result.success ? 0.1 : 0);
+    
+    // Update average response time
+    const responseTime = now - new Date(agent.state.lastUpdated).getTime();
+    performance.avgResponseTime = (performance.avgResponseTime * 0.9) + (responseTime * 0.1);
+  }
+
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  getSwarmMetrics(): SwarmMetrics {
+    const activeAgents = Array.from(this.agents.values()).filter(a => a.state.status === 'running').length;
+    const pendingTasks = Array.from(this.tasks.values()).filter(t => t.status === 'pending').length;
+    const completedTasks = Array.from(this.tasks.values()).filter(t => t.status === 'completed').length;
+    const failedTasks = Array.from(this.tasks.values()).filter(t => t.status === 'failed').length;
+    
+    const agentUtilization = Array.from(this.agents.entries()).reduce((acc, [id, agent]) => {
+      acc[id] = agent.state.status === 'running' ? 1 : 0;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      activeAgents,
+      pendingTasks,
+      completedTasks,
+      failedTasks,
+      avgResponseTime: this.calculateAverageResponseTime(),
+      successRate: this.calculateSuccessRate(),
+      agentUtilization
+    };
+  }
+
+  private calculateAverageResponseTime(): number {
+    const completedTasks = Array.from(this.tasks.values())
+      .filter(t => t.status === 'completed');
+    
+    if (completedTasks.length === 0) return 0;
+    
+    const totalTime = completedTasks.reduce((sum, task) => {
+      return sum + (new Date(task.updatedAt).getTime() - new Date(task.createdAt).getTime());
+    }, 0);
+    
+    return totalTime / completedTasks.length;
+  }
+
+  private calculateSuccessRate(): number {
+    const completedTasks = Array.from(this.tasks.values())
+      .filter(t => t.status === 'completed');
+    
+    if (completedTasks.length === 0) return 0;
+    
+    const successfulTasks = completedTasks.filter(t => 
+      t.results.some(r => r.success)
+    );
+    
+    return successfulTasks.length / completedTasks.length;
   }
 
   private startMonitoring(): void {
@@ -706,5 +722,53 @@ Respond with ONLY the agent ID, nothing else.`;
   private async generateTaskId(agentId: string, _context: AgentContext): Promise<string> {
     // Generate a unique task ID using UUID
     return crypto.randomUUID();
+  }
+
+  private async processTaskQueue(): Promise<void> {
+    if (this.isProcessing || this.taskQueue.length === 0) return;
+
+    this.isProcessing = true;
+
+    while (this.taskQueue.length > 0) {
+      const task = this.taskQueue.shift()!;
+      const registration = this.agents.get(task.agentId);
+      if (!registration) continue;
+
+      try {
+        // Update agent state
+        registration.state.status = 'running';
+        registration.state.lastUpdated = new Date();
+
+        // Ensure model configuration is properly passed
+        const agentContext: AgentContext = {
+          ...task.context,
+          config: {
+            ...task.context.config,
+            modelConfig: task.context.config.modelConfig || task.context.metadata.modelConfig as ModelConfig
+          }
+        };
+        
+        const result = await registration.agent.execute(agentContext);
+
+        // Update agent state with minimal metadata
+        registration.state.status = 'completed';
+        registration.state.lastUpdated = new Date();
+        registration.state.metadata = {};
+
+        // Emit completion event
+        this.emit(`agentCompleted:${task.agentId}`, result);
+      } catch (error) {
+        // Update agent state
+        registration.state.status = 'failed';
+        registration.state.lastUpdated = new Date();
+
+        // Emit failure event
+        this.emit(`agentFailed:${task.agentId}`, error instanceof Error ? error : new Error(String(error)));
+
+        throw error;
+      }
+    }
+
+    this.isProcessing = false;
   }
 }

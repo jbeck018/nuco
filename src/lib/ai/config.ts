@@ -28,6 +28,7 @@ export const modelConfigSchema = z.object({
   presencePenalty: z.number().min(0).max(2).default(0),
   costPer1kInput: z.number().default(0),
   costPer1kOutput: z.number().default(0),
+  timeout: z.number().optional(),
   inputTokenCounter: z.function()
     .args(z.string())
     .returns(z.promise(z.number()))

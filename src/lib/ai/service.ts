@@ -1,3 +1,4 @@
+import { messages } from './../db/schema/messages';
 /**
  * AI Service
  * 
@@ -202,8 +203,8 @@ export async function generateCompletion(
     
     throw new AIServiceError(
       error instanceof Error ? error.message : 'Unknown error occurred',
-      options.modelId?.startsWith('gpt') ? 'openai' : 'anthropic',
-      'unknown'
+      'unknown',
+      error instanceof Error && 'status' in error ? (error as any).status : undefined,
     );
   }
 }
@@ -505,15 +506,51 @@ export class AIService {
     options: CompletionOptions
   ): Promise<StreamTextResult<ToolSet, never>> {
     try {
+      console.log('Starting generateCompletion with options:', {
+        modelId: options.modelId,
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
+        topP: options.topP,
+        metadata: options.metadata
+      });
+
       const executionIdFallback = uuidv4();
       const modelId = options.modelId || 'gpt-4';
       const provider = modelId.startsWith('gpt') ? 'openai' : 'anthropic';
+
+      console.log('Using model configuration:', { modelId, provider });
+
+      // Get model configuration
+      const modelConfig = getModelById(modelId);
+      if (!modelConfig) {
+        console.error('Model configuration not found:', { modelId, provider });
+        throw new AIServiceError(`Model ${modelId} not found`, provider, 'invalid_model');
+      }
+
+      console.log('Model configuration retrieved:', {
+        name: modelConfig.name,
+        contextWindow: modelConfig.contextWindow,
+        maxOutputTokens: modelConfig.maxOutputTokens,
+        provider: modelConfig.provider
+      });
+
+      // Create a complete model configuration for the context
+      const completeModelConfig = {
+        ...modelConfig,
+        timeout: modelConfig.maxOutputTokens ? 
+          Math.ceil(modelConfig.maxOutputTokens / 100) * 1000 : // Rough estimate: 1s per 100 tokens
+          60000, // Default 60s timeout
+        temperature: options.temperature || modelConfig.temperature || 0.7,
+        maxTokens: options.maxTokens || modelConfig.maxOutputTokens || 1000,
+        topP: options.topP || modelConfig.topP || 1
+      };
 
       const context: AgentContext = {
         messages,
         metadata: {
           ...options.metadata,
-          provider
+          provider,
+          modelConfig: completeModelConfig // Add model config to metadata
         },
         executionId: options.executionId || executionIdFallback,
         attempt: options.attempt,
@@ -528,17 +565,66 @@ export class AIService {
           name: 'Default Agent',
           description: 'Default agent for handling general queries',
           model: modelId,
+          modelConfig: completeModelConfig,
           metadata: {
             ...options.metadata,
-            provider
+            provider,
+            modelConfig: completeModelConfig // Add model config to config metadata
           }
         }
       };
 
+      console.log('Created agent context:', {
+        executionId: context.executionId,
+        model: context.config.model,
+        messageCount: context.messages.length,
+        modelConfig: context.config.modelConfig
+      });
+
       // Execute agent
-      const result = await this.orchestrator.executeAgent('default', context);
+      console.log('Executing task with orchestrator...');
+      const result = await this.orchestrator.executeTask(context);
+      console.log('Orchestrator task completed:', {
+        success: result.success,
+        hasOutput: !!result.output,
+        metadata: result.metadata
+      });
+      
+      // Check if we need to fall back to direct LLM completion
+      if (result.metadata?.fallbackToDirectLLM) {
+        console.log('Falling back to direct LLM completion');
+        // Create provider client based on model ID
+        const client = provider === 'openai' 
+          ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+          : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+        console.log('Created provider client:', { provider });
+
+        // Use the model configuration from the context
+        const streamConfig = {
+          model: client(modelId),
+          messages: context.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          })),
+          temperature: completeModelConfig.temperature,
+          maxTokens: completeModelConfig.maxTokens,
+          topP: completeModelConfig.topP
+        };
+
+        console.log('Streaming with configuration:', {
+          model: modelId,
+          messageCount: streamConfig.messages.length,
+          temperature: streamConfig.temperature,
+          maxTokens: streamConfig.maxTokens,
+          topP: streamConfig.topP
+        });
+
+        return streamText(streamConfig);
+      }
       
       // Create provider client based on model ID
+      console.log('Creating provider client for direct streaming');
       const client = provider === 'openai' 
         ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
         : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -549,24 +635,63 @@ export class AIService {
         content: msg.content
       }));
 
-      return streamText({
+      const streamConfig = {
         model: client(modelId),
         messages: serializableMessages,
-        temperature: options.temperature || 0.7,
-        maxTokens: options.maxTokens || 1000,
-        topP: options.topP || 1
+        temperature: completeModelConfig.temperature,
+        maxTokens: completeModelConfig.maxTokens,
+        topP: completeModelConfig.topP
+      };
+
+      console.log('Streaming with configuration:', {
+        model: modelId,
+        messageCount: streamConfig.messages.length,
+        temperature: streamConfig.temperature,
+        maxTokens: streamConfig.maxTokens,
+        topP: streamConfig.topP
       });
 
+      return streamText(streamConfig);
+
     } catch (error) {
-      console.error('Error in AIService.generateCompletion:', error);
+      console.error('Error in AIService.generateCompletion:', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        options: {
+          modelId: options.modelId,
+          provider: options.modelId?.startsWith('gpt') ? 'openai' : 'anthropic'
+        }
+      });
       
+      // If it's already an AIServiceError, rethrow it
+      if (error instanceof AIServiceError) {
+        console.log('Rethrowing existing AIServiceError');
+        throw error;
+      }
+
+      // For other errors, create a new AIServiceError with proper context
       const modelId = options.modelId || 'gpt-4';
-      const provider = modelId.startsWith('gpt') ? 'openai' : 'anthropic';
+      const modelConfig = getModelById(modelId);
+      const provider = modelConfig?.provider || (modelId.startsWith('gpt') ? 'openai' : 'anthropic');
+      
+      console.log('Creating new AIServiceError with context:', {
+        modelId,
+        provider,
+        modelConfig: modelConfig ? {
+          name: modelConfig.name,
+          provider: modelConfig.provider
+        } : null
+      });
       
       throw new AIServiceError(
         error instanceof Error ? error.message : 'Unknown error occurred',
         provider,
-        'unknown'
+        'unknown',
+        error instanceof Error && 'status' in error ? (error as any).status : undefined,
+        provider
       );
     }
   }
