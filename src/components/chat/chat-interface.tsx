@@ -405,7 +405,7 @@ export function ChatInterface({
             </div>
           </div>
         ) : (
-          <div className="flex w-full flex-col">
+          <div className="flex w-full flex-col gap-4">
             {messages.map(renderMessage)}
             
             {streamingMessage && isProcessing && (
