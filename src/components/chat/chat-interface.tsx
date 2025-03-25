@@ -276,22 +276,6 @@ export function ChatInterface({
           agent,
         };
         setMessages(prev => [...prev, dashboardMessage]);
-      } else {
-        // Handle regular message response
-        const assistantMessage: Message = {
-          id: uuidv4(),
-          role: 'assistant',
-          content: response || '',
-          createdAt: new Date().toISOString(),
-          type: 'text',
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-        
-        await addMessageMutation.mutateAsync({
-          conversationId,
-          role: 'assistant',
-          content: assistantMessage.content,
-        });
       }
       
     } catch (error) {
@@ -405,7 +389,7 @@ export function ChatInterface({
             </div>
           </div>
         ) : (
-          <div className="flex w-full flex-col">
+          <div className="flex w-full flex-col gap-4">
             {messages.map(renderMessage)}
             
             {streamingMessage && isProcessing && (

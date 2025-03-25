@@ -77,9 +77,35 @@ function matchesAnyRoute(pathname: string, routes: string[]): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-  const user = await getUserFromRequest(request);
   const pathname = request.nextUrl.pathname;
-  
+  const user = await getUserFromRequest(request);
+  const isAuthenticated = !!user;
+
+  // Handle root route redirection
+  if (pathname === "/") {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    } else {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
+  }
+
+  // Handle protected routes
+  if (matchesAnyRoute(pathname, protectedRoutes) && !isAuthenticated) {
+    const callbackUrl = encodeURIComponent(pathname);
+    return NextResponse.redirect(new URL(`/auth/login?callbackUrl=${callbackUrl}`, request.url));
+  }
+
+  // Handle auth routes redirection for authenticated users
+  if (matchesAnyRoute(pathname, authRoutes) && isAuthenticated) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Handle landing routes redirection for authenticated users
+  if (matchesAnyRoute(pathname, landingRoutes) && isAuthenticated) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
   // Apply rate limiting
   const rateLimitResponse = await rateLimit(request);
   if (rateLimitResponse) {
@@ -105,35 +131,6 @@ export async function middleware(request: NextRequest) {
     "Server-Timing", 
     `edge;dur=${endTime - startTime};desc="Edge Middleware"`
   );
-  
-  // Check if the path is a protected route
-  const isProtectedRoute = matchesAnyRoute(pathname, protectedRoutes);
-  
-  // Check if the path is an auth route
-  const isAuthRoute = matchesAnyRoute(pathname, authRoutes);
-  
-  // Check if the path is a public route
-  const isPublicRoute = matchesAnyRoute(pathname, publicRoutes);
-  
-  // Check if the path is a landing route
-  const isLandingRoute = matchesAnyRoute(pathname, landingRoutes);
-  
-  // CASE 1: Unauthenticated user trying to access protected route -> redirect to login
-  if (!user && isProtectedRoute) {
-    const url = new URL('/auth/login', request.url);
-    url.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(url);
-  }
-  
-  // CASE 2: Authenticated user trying to access auth route -> redirect to dashboard
-  if (user && isAuthRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-  
-  // CASE 3: Authenticated user trying to access landing route -> redirect to dashboard
-  if (user && isLandingRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
   
   // CASE 4: If the user is authenticated and trying to access an organization route
   if (user && pathname.startsWith('/org')) {

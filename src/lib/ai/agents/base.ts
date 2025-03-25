@@ -20,12 +20,12 @@ export interface AgentState {
 }
 
 /**
- * Agent configuration interface
+ * Base agent configuration interface (serializable)
  */
-export interface AgentConfig {
-  id: string;
-  name: string;
-  description: string;
+export interface BaseAgentConfig {
+  id?: string;
+  name?: string;
+  description?: string;
   modelConfig?: ModelConfig;
   systemPrompt?: string;
   maxRetries?: number;
@@ -33,7 +33,7 @@ export interface AgentConfig {
   metadata?: Record<string, unknown>;
   enabled?: boolean;
   model: string;
-  aiService: AIService;
+  aiService?: any; // Allow aiService to be optional
   // Add Pages-specific config
   pagesConfig?: {
     maxDuration?: number;  // Max duration in seconds
@@ -43,12 +43,19 @@ export interface AgentConfig {
 }
 
 /**
+ * Runtime agent configuration (includes dependencies)
+ */
+export interface AgentConfig extends BaseAgentConfig {
+  aiService: AIService;
+}
+
+/**
  * Agent execution context
  */
 export interface AgentContext {
   messages: Message[];
   state: AgentState;
-  config: AgentConfig;
+  config: BaseAgentConfig;
   metadata: Record<string, unknown>;
   data?: unknown;
   executionId: string;

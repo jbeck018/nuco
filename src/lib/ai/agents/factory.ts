@@ -13,7 +13,7 @@ import { AIService } from '../service';
 /**
  * Agent type registry
  */
-export type AgentType = new () => BaseAgent;
+export type AgentType = new (aiService: AIService) => BaseAgent;
 
 /**
  * Agent factory configuration
@@ -65,7 +65,7 @@ export class AgentFactory {
    */
   public async createAgent(
     agentId: string,
-    config: Partial<AgentConfig> = {}
+    config: Partial<AgentConfig> & Record<string, any> = {}
   ): Promise<BaseAgent> {
     const agentType = this.agentTypes.get(agentId);
     if (!agentType) {
@@ -76,11 +76,11 @@ export class AgentFactory {
       );
     }
 
-    // Create agent instance
-    const agent = new agentType();
+    // Create agent instance with AIService
+    const agent = new agentType(this.aiService);
 
     // Prepare configuration
-    const agentConfig: AgentConfig = {
+    const agentConfig = {
       id: config.id || crypto.randomUUID(),
       name: config.name || agentId,
       description: config.description || `Agent of type ${agentId}`,
@@ -93,11 +93,13 @@ export class AgentFactory {
         ...config.metadata,
       },
       enabled: config.enabled ?? true,
-      model: config.modelConfig?.id || 'gpt-4',
-      aiService: this.aiService
+      model: config.modelConfig?.id || config.model || 'gpt-4',
+      aiService: this.aiService,
+      // Preserve all other configuration properties
+      ...config
     };
 
-    // Initialize agent
+    // Initialize agent with complete config
     await agent.initialize(agentConfig);
 
     return agent;

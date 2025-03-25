@@ -53,6 +53,15 @@ export class AnalysisAgent extends BaseAgent {
   async initialize(config: AnalysisAgentConfig): Promise<void> {
     await super.initialize(config);
 
+    // Ensure analysis configuration exists
+    if (!config.analysis) {
+      config.analysis = {
+        textAnalysis: {
+          enabled: true,
+        },
+      };
+    }
+
     // Initialize analyzers with their respective configs
     if (config.analysis.textAnalysis?.enabled) {
       await this.textAnalyzer.initialize({

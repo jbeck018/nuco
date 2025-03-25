@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { generateCompletion } from '@/lib/ai/service';
 import { AIServiceError } from '@/lib/ai/error';
-import { AgentFactory } from '@/lib/ai/agents/factory';
-import { Message } from '@/lib/ai/service';
-import { AgentContext, AgentState } from '@/lib/ai/agents/base';
-import { AIService } from '@/lib/ai/service';
+import { aiService } from '@/lib/ai/service';
 import { z } from 'zod';
 
 // Set runtime to edge for optimal performance
@@ -38,86 +34,37 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = await request.json();
     const validatedData = requestSchema.parse(body);
 
-    // Create agent factory
-    const agentFactory = AgentFactory.getInstance({
-      defaultModelId: validatedData.model || 'gpt-4',
-      defaultSystemPrompt: validatedData.systemPrompt || '',
-      metadata: {
-        userId: session.user.id,
-        organizationId: validatedData.organizationId,
-      },
-    });
+    // Initialize AI service if not already initialized
+    await aiService.initialize();
 
-    // Get the last message to determine which agent to use
-    const lastMessage = validatedData.messages[validatedData.messages.length - 1];
-    
-    // Create a default agent for now (we'll implement agent selection logic later)
-    const agent = await agentFactory.createAgent('default', {
-      modelConfig: {
-        id: validatedData.model || 'gpt-4',
-        name: validatedData.model || 'GPT-4',
-        provider: 'openai',
-        contextWindow: 128000,
-        maxOutputTokens: validatedData.maxTokens || 4096,
-        temperature: validatedData.temperature || 0.7,
-        topP: 1,
-        frequencyPenalty: 0,
-        presencePenalty: 0,
-        costPer1kInput: 0.01,
-        costPer1kOutput: 0.03,
-      },
-    });
-
-    // Convert messages to the correct type
-    const messages: Message[] = validatedData.messages.map(msg => ({
-      id: crypto.randomUUID(),
-      role: msg.role,
-      content: msg.content,
-      createdAt: new Date(),
-    }));
-
-    // Create agent context
-    const context: AgentContext = {
-      messages,
-      state: {
+    // Generate completion using the AI service
+    const result = await aiService.generateCompletion(
+      validatedData.messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
         id: crypto.randomUUID(),
-        status: 'running',
-        lastUpdated: new Date(),
-        metadata: {},
-      },
-      config: {
-        id: crypto.randomUUID(),
-        name: 'default',
-        description: 'Default agent for handling messages',
-        model: validatedData.model || 'gpt-4',
-        aiService: new AIService(),
-      },
-      metadata: {
-        userId: session.user.id,
-        organizationId: validatedData.organizationId,
-      },
-      executionId: crypto.randomUUID(),
-    };
-
-    // Execute the agent with the message
-    const result = await agent.execute(context);
-
-    // Generate completion using the agent's output
-    const completion = await generateCompletion(
-      messages,
+        createdAt: new Date(),
+      })), 
       {
-        modelId: validatedData.model || 'gpt-4',
-        temperature: validatedData.temperature || 0.7,
-        maxTokens: validatedData.maxTokens || 1000,
+        modelId: validatedData.model,
+        temperature: validatedData.temperature,
+        maxTokens: validatedData.maxTokens,
         organizationId: validatedData.organizationId,
         useCustomTokens: validatedData.useCustomTokens,
         customTokens: validatedData.customTokens,
         systemPrompt: validatedData.systemPrompt,
+        metadata: {
+          userId: session.user.id,
+        },
       }
     );
 
     // Return streaming response
-    return completion.toDataStreamResponse();
+    return new Response(result.toDataStream(), {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
 
   } catch (error) {
     console.error('Agent API error:', error);
@@ -128,7 +75,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           type: error.type,
           provider: error.code,
         },
-        { status: 500 }
+        { status: error.status || 500 }
       );
     }
     if (error instanceof z.ZodError) {
