@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { Suspense } from 'react';
 import { preload, parallelFetch } from '@/lib/server-utils';

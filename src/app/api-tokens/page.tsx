@@ -90,7 +90,7 @@ export default function ApiTokensPage() {
         }
         
         const data = await response.json();
-        setTokens(data);
+        setTokens(data as ApiToken[]);
       } catch (err) {
         console.error("Error fetching API tokens:", err);
         setError("Failed to load API tokens. Please try again later.");
@@ -131,10 +131,10 @@ export default function ApiTokensPage() {
       const data = await response.json();
       
       // Store the newly created token to display to the user
-      setNewlyCreatedToken(data.token);
+      setNewlyCreatedToken((data as ApiToken).token);
       
       // Add the new token to the list
-      setTokens((prev) => [...prev, data]);
+      setTokens((prev) => [...prev, data as ApiToken]);
       
       // Reset the form
       setNewTokenName("");

@@ -5,7 +5,7 @@ import { aiService } from '@/lib/ai/service';
 import { z } from 'zod';
 
 // Set runtime to edge for optimal performance
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 // Define request schema
 const requestSchema = z.object({

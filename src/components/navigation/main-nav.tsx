@@ -34,24 +34,16 @@ export function MainNav({ children }: MainNavProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const { toast } = useToast();
   
-  const isAuthenticated = status === "authenticated";
+  const isAuthenticated = !!session?.user;
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                           pathname.startsWith('/chat') || 
                           pathname.startsWith('/settings') || 
                           pathname.startsWith('/integrations') ||
                           pathname.startsWith('/api-tokens') ||
                           pathname.startsWith('/chat-templates');
-  
-  // Redirect unauthenticated users from dashboard routes to login
-  useEffect(() => {
-    if (isDashboardRoute && status === "unauthenticated") {
-      const callbackUrl = encodeURIComponent(pathname);
-      router.push(`/auth/login?callbackUrl=${callbackUrl}`);
-    }
-  }, [isDashboardRoute, status, pathname, router]);
   
   // Set sidebar state based on screen size
   useEffect(() => {

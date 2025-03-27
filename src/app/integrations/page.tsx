@@ -5,7 +5,7 @@
  * It uses the tRPC client to fetch integration data and manage integration operations.
  */
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { Suspense } from 'react';
 import { Metadata } from 'next';

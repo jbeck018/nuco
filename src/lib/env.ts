@@ -13,7 +13,7 @@ export interface Env {
 
   // NextAuth Configuration
   NEXTAUTH_URL: string;
-  NEXTAUTH_SECRET: string;
+  AUTH_SECRET: string;
 
   // Database Configuration
   DATABASE_URL: string;
@@ -104,7 +104,7 @@ export function getEnv(): Env {
 
     // NextAuth Configuration
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || '',
+    AUTH_SECRET: process.env.AUTH_SECRET || '',
 
     // Database Configuration
     DATABASE_URL: process.env.DATABASE_URL || '',
@@ -188,7 +188,7 @@ export function validateEnv(): void {
 
   // Check critical environment variables
   if (!env.DATABASE_URL) missingVars.push('DATABASE_URL');
-  if (!env.NEXTAUTH_SECRET) missingVars.push('NEXTAUTH_SECRET');
+  if (!env.AUTH_SECRET) missingVars.push('AUTH_SECRET');
   if (!env.IRON_SESSION_PASSWORD) missingVars.push('IRON_SESSION_PASSWORD');
 
   // Throw an error if any required variables are missing

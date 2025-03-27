@@ -68,7 +68,7 @@ export async function extractTokenSettings(req: NextRequest): Promise<{
 }> {
   try {
     // Try to get the organization ID from the request body
-    const body = await req.json();
+    const body = await req.json() as Record<string, any>;
     
     // Clone the request since we've consumed the body
     const newReq = new NextRequest(req.url, {

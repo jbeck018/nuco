@@ -117,10 +117,14 @@ async function createOrUpdateIntegration(
 export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/auth/login",
-    // Use newUser instead of signUp as per NextAuth v5 API
     newUser: "/auth/signup",
     error: "/auth/error",
     verifyRequest: "/auth/verify",
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
     authorized({ auth, request }) {
@@ -178,131 +182,6 @@ export const authConfig: NextAuthConfig = {
         }
       }
       
-      // Check if token needs refresh (including expired tokens)
-      if (token.expiresAt && (Date.now() >= token.expiresAt - 5 * 60 * 1000 || Date.now() >= token.expiresAt)) {
-        const startTime = Date.now();
-        const refreshAttempt = {
-          provider: token.provider,
-          userId: token.id,
-          timestamp: new Date().toISOString(),
-          attemptNumber: 0,
-          success: false,
-          error: null as string | null,
-          duration: 0,
-          retryCount: 0,
-        };
-
-        try {
-          let response;
-          let retryCount = 0;
-          const maxRetries = 3;
-          const retryDelay = 1000; // 1 second
-
-          while (retryCount < maxRetries) {
-            refreshAttempt.attemptNumber++;
-            refreshAttempt.retryCount = retryCount;
-            
-            try {
-              if (token.provider === 'salesforce') {
-                response = await fetch(`${process.env.SALESFORCE_URL}/services/oauth2/token`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                  },
-                  body: new URLSearchParams({
-                    grant_type: 'refresh_token',
-                    client_id: process.env.SALESFORCE_CLIENT_ID!,
-                    client_secret: process.env.SALESFORCE_CLIENT_SECRET!,
-                    refresh_token: token.refreshToken as string,
-                  }),
-                });
-              } else if (token.provider === 'hubspot') {
-                response = await fetch('https://api.hubapi.com/oauth/v1/token', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                  },
-                  body: new URLSearchParams({
-                    grant_type: 'refresh_token',
-                    client_id: process.env.HUBSPOT_CLIENT_ID!,
-                    client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
-                    refresh_token: token.refreshToken as string,
-                  }),
-                });
-              }
-
-              if (!response) throw new Error('Invalid provider');
-
-              const tokens = await response.json();
-
-              if (!response.ok) {
-                // Check if the error is due to an invalid refresh token
-                if (tokens.error === 'invalid_grant' || tokens.error === 'invalid_token') {
-                  refreshAttempt.error = `Invalid refresh token: ${tokens.error}`;
-                  console.error('Token refresh monitoring:', {
-                    ...refreshAttempt,
-                    duration: Date.now() - startTime,
-                  });
-                  return { ...token, error: 'RefreshTokenExpired' };
-                }
-                throw tokens;
-              }
-
-              // Update token with new values
-              token.accessToken = tokens.access_token;
-              token.expiresAt = Date.now() + tokens.expires_in * 1000;
-
-              // Update the integration in the database
-              if (token.id && (token.provider === 'salesforce' || token.provider === 'hubspot')) {
-                await createOrUpdateIntegration(
-                  token.id,
-                  token.provider as IntegrationType,
-                  tokens.access_token,
-                  token.defaultOrganizationId,
-                  token.refreshToken,
-                  Math.floor(Date.now() / 1000) + tokens.expires_in
-                );
-              }
-
-              // Log successful refresh
-              refreshAttempt.success = true;
-              console.info('Token refresh monitoring:', {
-                ...refreshAttempt,
-                duration: Date.now() - startTime,
-                newExpiry: new Date(token.expiresAt).toISOString(),
-              });
-
-              // Successfully refreshed, break the retry loop
-              break;
-            } catch (error) {
-              retryCount++;
-              refreshAttempt.error = error instanceof Error ? error.message : 'Unknown error';
-              
-              if (retryCount === maxRetries) {
-                throw error;
-              }
-              
-              // Log retry attempt
-              console.warn('Token refresh monitoring - retry:', {
-                ...refreshAttempt,
-                duration: Date.now() - startTime,
-              });
-              
-              // Wait before retrying
-              await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
-            }
-          }
-        } catch (error) {
-          refreshAttempt.error = error instanceof Error ? error.message : 'Unknown error';
-          console.error('Token refresh monitoring - final failure:', {
-            ...refreshAttempt,
-            duration: Date.now() - startTime,
-          });
-          // If we've exhausted all retries, mark the token as needing reauthorization
-          return { ...token, error: 'RefreshAccessTokenError' };
-        }
-      }
-
       return token;
     },
     session({ session, token }) {
@@ -314,7 +193,7 @@ export const authConfig: NextAuthConfig = {
       }
       
       return session;
-    },
+    }
   },
   providers: [
     Google({

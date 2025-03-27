@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSlackIntegration } from '@/lib/integrations/slack';
@@ -49,7 +49,7 @@ async function streamTextResultToString(stream: StreamTextResult<ToolSet, never>
  */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const body = await request.json();
+    const body = await request.json() as Record<string, any>;
     const { message, channelId, threadTs, integrationId, organizationId } = body;
     
     if (!message) {

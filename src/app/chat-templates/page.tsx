@@ -84,7 +84,7 @@ export default function TemplatesPage() {
           throw new Error("Failed to fetch templates");
         }
 
-        const data = await response.json();
+        const data = await response.json() as PromptTemplate[];
         setTemplates(data);
       } catch (error) {
         console.error("Error fetching templates:", error);
@@ -174,7 +174,7 @@ export default function TemplatesPage() {
             : ""
         }`
       );
-      const updatedData = await updatedResponse.json();
+      const updatedData = await updatedResponse.json() as PromptTemplate[];
       setTemplates(updatedData);
 
       toast({
