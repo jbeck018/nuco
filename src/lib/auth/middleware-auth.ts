@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 export async function isAuthenticated(request: NextRequest): Promise<boolean> {
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.AUTH_SECRET,
   });
   
   return !!token;
@@ -27,7 +27,7 @@ export async function isAuthenticated(request: NextRequest): Promise<boolean> {
 export async function getUserFromRequest(request: NextRequest) {
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.AUTH_SECRET,
   });
   
   if (!token) {
@@ -35,8 +35,11 @@ export async function getUserFromRequest(request: NextRequest) {
   }
   
   return {
-    id: token.id,
+    id: token.sub || token.id,
     role: token.role,
     defaultOrganizationId: token.defaultOrganizationId,
+    email: token.email,
+    name: token.name,
+    image: token.picture || token.image,
   };
 } 

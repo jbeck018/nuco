@@ -9,8 +9,8 @@ This document provides instructions for setting up authentication in Neuco-App, 
 Add the following to your `.env` file:
 
 ```
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your-nextauth-secret
+AUTH_URL=http://localhost:3000
+AUTH_SECRET=your-nextauth-secret
 ```
 
 For production, set `NEXTAUTH_URL` to your production URL and generate a secure random string for `NEXTAUTH_SECRET`.

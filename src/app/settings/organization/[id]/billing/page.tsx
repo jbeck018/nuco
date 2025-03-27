@@ -6,7 +6,7 @@ import { OrganizationBilling } from "@/components/organizations/OrganizationBill
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrganization } from "@/lib/organizations/context";
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 export default function OrganizationBillingSettingsPage() {
   const params = useParams<{ id: string }>();

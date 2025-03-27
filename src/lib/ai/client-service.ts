@@ -57,7 +57,7 @@ export async function generateClientCompletion(
     });
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await response.json().catch(() => ({})) as Record<string, any>;
       throw new Error(errorData.error || `API request failed with status ${response.status}`);
     }
     

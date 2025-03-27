@@ -2,7 +2,7 @@
  * tRPC API route handler
  * This file handles all tRPC API requests
  */
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@/lib/trpc/router';

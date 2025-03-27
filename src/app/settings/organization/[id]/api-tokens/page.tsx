@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useOrganization } from "@/lib/organizations/context";
 import { ApiTokenManagement } from "@/components/settings/ApiTokenManagement";
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 export default function OrganizationApiTokensPage() {
   const params = useParams<{ id: string }>();

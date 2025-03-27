@@ -34,7 +34,7 @@ export default function SlackIntegrationPage() {
       if (!response.ok) {
         throw new Error("Failed to fetch integrations");
       }
-      const data = await response.json();
+      const data = await response.json() as Integration[];
       setIntegrations(data);
     } catch (error) {
       console.error("Error fetching integrations:", error);
@@ -64,7 +64,7 @@ export default function SlackIntegrationPage() {
         throw new Error("Failed to initiate Slack connection");
       }
       
-      const { url } = await response.json();
+      const { url } = await response.json() as Record<string, any>;
       window.location.href = url;
     } catch (error) {
       console.error("Error connecting to Slack:", error);

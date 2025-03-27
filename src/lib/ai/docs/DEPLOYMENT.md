@@ -26,8 +26,8 @@ R2_SECRET_ACCESS_KEY=your_secret_key
 R2_BUCKET=your_bucket_name
 
 # Authentication
-NEXTAUTH_URL=your_app_url
-NEXTAUTH_SECRET=your_secret
+AUTH_URL=your_app_url
+AUTH_SECRET=your_secret
 ```
 
 ## Local Development
