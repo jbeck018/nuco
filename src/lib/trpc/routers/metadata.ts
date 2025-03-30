@@ -394,6 +394,17 @@ export const metadataRouter = router({
           includeOrganizationData: z.boolean(),
           contextWindowSize: z.number(),
         }).optional(),
+        customTokens: z.object({
+          openai: z.string().optional(),
+          anthropic: z.string().optional(),
+          google: z.string().optional(),
+        }).optional(),
+        useCustomTokens: z.boolean().optional(),
+        usageLimit: z.object({
+          monthlyTokenLimit: z.number(),
+          currentMonthUsage: z.number().optional(),
+          resetDate: z.string().optional(),
+        }).optional(),
       }).optional(),
     }))
     .mutation(async ({ input }) => {

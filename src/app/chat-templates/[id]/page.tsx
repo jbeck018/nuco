@@ -1,6 +1,6 @@
 "use client";
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
@@ -58,7 +58,7 @@ export default function EditTemplatePage(props: {
           throw new Error("Failed to fetch template");
         }
 
-        const data = await response.json();
+        const data = await response.json() as PromptTemplate;
         setTemplate(data);
       } catch (error) {
         console.error("Error fetching template:", error);

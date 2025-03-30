@@ -1,10 +1,10 @@
-# Nuco-App Architecture
+# Neuco-App Architecture
 
-This document provides a comprehensive overview of the Nuco-App architecture, explaining how all components fit together to create a cohesive application.
+This document provides a comprehensive overview of the Neuco-App architecture, explaining how all components fit together to create a cohesive application.
 
 ## System Overview
 
-Nuco-App is a Next.js application that provides AI-powered integrations with various business tools. The application follows a modern architecture with the following key components:
+Neuco-App is a Next.js application that provides AI-powered integrations with various business tools. The application follows a modern architecture with the following key components:
 
 1. **Frontend**: Next.js with App Router for server components and client components
 2. **Backend**: API routes and tRPC procedures for type-safe API endpoints
@@ -163,4 +163,4 @@ The application is deployed on Vercel with the following components:
 
 ## Conclusion
 
-The Nuco-App architecture is designed to be modular, scalable, and maintainable. By separating concerns into distinct layers and following modern design patterns, the application can evolve and grow while maintaining code quality and performance. 
+The Neuco-App architecture is designed to be modular, scalable, and maintainable. By separating concerns into distinct layers and following modern design patterns, the application can evolve and grow while maintaining code quality and performance. 

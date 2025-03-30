@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -106,7 +106,7 @@ export async function PUT(
     }
     
     // Get request body
-    const body = await request.json();
+    const body = await request.json() as Record<string, any>;
     
     // Update extension settings
     const updatedExtension = await extensionService.updateExtensionSettings(

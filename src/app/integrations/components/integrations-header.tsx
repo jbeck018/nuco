@@ -21,7 +21,7 @@ export function IntegrationsHeader({ successMessage, errorMessage }: Integration
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
         <p className="text-muted-foreground mt-2">
-          Connect your Nuco app with external services to extend its functionality.
+          Connect your Neuco app with external services to extend its functionality.
         </p>
       </div>
 

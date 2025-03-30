@@ -5,7 +5,7 @@
  * It handles communication with the OpenAI API and provides methods for generating completions.
  */
 
-import { openai } from '@ai-sdk/openai';
+import { openai, createOpenAI } from '@ai-sdk/openai';
 import { embed, streamText } from 'ai';
 import { ModelConfig } from '../config';
 
@@ -55,7 +55,6 @@ export class OpenAIError extends Error {
  */
 function parseOpenAIError(error: unknown): OpenAIError {
   if (typeof error === 'object' && error !== null) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const err = error as Record<string, any>;
     
     // Handle rate limit errors
@@ -152,13 +151,14 @@ function parseOpenAIError(error: unknown): OpenAIError {
  * @param messages The messages to send to the API
  * @param modelConfig The model configuration to use
  * @param functions Optional functions for function calling (not implemented yet)
+ * @param apiKey Optional custom API key to use instead of the default
  * @returns A streaming response from the API
  */
 export async function generateOpenAIStream(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   modelConfig: ModelConfig,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  functions?: OpenAIFunction[]
+  functions?: OpenAIFunction[],
+  apiKey?: string
 ) {
   // Validate that this is an OpenAI model
   if (modelConfig.provider !== 'openai') {
@@ -170,10 +170,12 @@ export async function generateOpenAIStream(
     // Function calling will be implemented in a future update
     // when the correct imports from the Vercel AI SDK are available
     // TODO: Implement function calling with the correct imports
-    
-    // Use streamText for regular text completion
+    const openaiClient = createOpenAI({
+      apiKey: apiKey || process.env.OPENAI_API_KEY,
+    });
+    // Use streamText for regular text completion with optional API key
     return streamText({
-      model: openai(modelConfig.id),
+      model: openaiClient(modelConfig.id),
       messages,
       temperature: modelConfig.temperature,
     });

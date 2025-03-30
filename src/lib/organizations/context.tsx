@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/trpc/router";
 import { useTRPCClient } from "@/lib/trpc/trpc";
+import { handleAuthError, OrganizationAuthError } from '@/lib/auth/error-handler';
 
 // Define types for organization data
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -116,10 +117,20 @@ export function OrganizationProvider({
       
       // Only redirect if not in the settings page and noRedirect is not set
       if (!options?.noRedirect && pathname && !pathname.includes('/settings/')) {
-        router.push(`/org/${slug}`);
+        router.push(`/org/${org.slug}`);
       }
     } catch (err) {
       console.error(`Error fetching organization by slug ${slug}:`, err);
+      
+      // Check if this is an organization auth error
+      if (err instanceof Error && 
+          (err.name === 'OrganizationAuthError' || 
+           err.message.includes('Organization not found'))) {
+        // Handle the auth error (logout and redirect)
+        await handleAuthError(err);
+        return;
+      }
+      
       setError(err instanceof Error ? err : new Error(`Failed to fetch organization with slug: ${slug}`));
     } finally {
       setIsLoading(false);
@@ -145,6 +156,16 @@ export function OrganizationProvider({
       }
     } catch (err) {
       console.error(`Error fetching organization by id ${id}:`, err);
+      
+      // Check if this is an organization auth error
+      if (err instanceof Error && 
+          (err.name === 'OrganizationAuthError' || 
+           err.message.includes('Organization not found'))) {
+        // Handle the auth error (logout and redirect)
+        await handleAuthError(err);
+        return;
+      }
+      
       setError(err instanceof Error ? err : new Error(`Failed to fetch organization with id: ${id}`));
     } finally {
       setIsLoading(false);

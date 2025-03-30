@@ -40,8 +40,10 @@ declare module "next-auth/jwt" {
     role?: string;
     id?: string;
     accessToken?: string;
+    refreshToken?: string;
     provider?: string;
     defaultOrganizationId?: string;
+    expiresAt?: number;
   }
 }
 
@@ -53,7 +55,14 @@ import { getUserOrganizations, createOrganization } from "@/lib/organizations/se
 /**
  * Helper function to create or update an integration in the database
  */
-async function createOrUpdateIntegration(userId: string, provider: IntegrationType, accessToken: string, organizationId?: string) {
+async function createOrUpdateIntegration(
+  userId: string, 
+  provider: IntegrationType, 
+  accessToken: string, 
+  organizationId?: string,
+  refreshToken?: string,
+  expiresAt?: number
+) {
   try {
     // Check if the integration already exists
     const existingIntegrations = await db.select().from(integrations).where(
@@ -63,7 +72,11 @@ async function createOrUpdateIntegration(userId: string, provider: IntegrationTy
       )
     );
     
-    const config = { accessToken };
+    const config = { 
+      accessToken,
+      refreshToken,
+      expiresAt
+    };
     
     if (existingIntegrations.length > 0) {
       // Update the existing integration
@@ -104,10 +117,14 @@ async function createOrUpdateIntegration(userId: string, provider: IntegrationTy
 export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/auth/login",
-    // Use newUser instead of signUp as per NextAuth v5 API
     newUser: "/auth/signup",
     error: "/auth/error",
     verifyRequest: "/auth/verify",
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
     authorized({ auth, request }) {
@@ -136,15 +153,14 @@ export const authConfig: NextAuthConfig = {
       // Add OAuth access token to the token
       if (account) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
         token.provider = account.provider;
+        token.expiresAt = account.expires_at ? account.expires_at * 1000 : undefined;
         
         // For OAuth sign-ins, check if the user has an organization
-        // We'll now handle organization creation in the complete-signup page
         if (token.id) {
           try {
             const organizations = await getUserOrganizations(token.id as string);
-            
-            // If user has organizations but no default, set the first one as default
             if (organizations.length > 0 && !token.defaultOrganizationId) {
               token.defaultOrganizationId = organizations[0].id;
             }
@@ -155,7 +171,9 @@ export const authConfig: NextAuthConfig = {
                 token.id as string,
                 account.provider as IntegrationType,
                 account.access_token as string,
-                token.defaultOrganizationId as string | undefined
+                token.defaultOrganizationId as string | undefined,
+                account.refresh_token as string | undefined,
+                account.expires_at
               );
             }
           } catch (error) {
@@ -175,7 +193,7 @@ export const authConfig: NextAuthConfig = {
       }
       
       return session;
-    },
+    }
   },
   providers: [
     Google({
@@ -189,15 +207,35 @@ export const authConfig: NextAuthConfig = {
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
-          scope: "openid id profile email address phone full",
+          scope: "openid id profile email address phone full refresh_token",
         }
       },
-      // issuer: process.env.SALESFORCE_URL,
+      async profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+        };
+      },
     }),
     HubSpot({
       clientId: process.env.HUBSPOT_CLIENT_ID!,
       clientSecret: process.env.HUBSPOT_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          scope: "oauth contacts timeline crm.objects.contacts.read crm.objects.contacts.write crm.objects.companies.read crm.objects.companies.write crm.objects.deals.read crm.objects.deals.write refresh_token",
+        }
+      },
+      async profile(profile) {
+        return {
+          id: profile.id,
+          name: profile.properties?.firstname ? `${profile.properties.firstname} ${profile.properties.lastname || ''}`.trim() : profile.email,
+          email: profile.properties?.email || profile.email,
+          image: profile.properties?.avatar,
+        };
+      },
     }),
     Credentials({
       id: "credentials",

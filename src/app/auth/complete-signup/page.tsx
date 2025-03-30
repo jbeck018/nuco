@@ -82,7 +82,7 @@ export default function CompleteSignupPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as Record<string, any>;
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to complete signup");

@@ -38,8 +38,8 @@ const mockExtensions: Extension[] = [
     version: "1.0.0",
     type: "slack",
     author: {
-      name: "Nuco Team",
-      email: "team@nuco.dev",
+      name: "Neuco Team",
+      email: "team@neuco.dev",
     },
     isActive: true,
     isSystem: false,
@@ -48,12 +48,12 @@ const mockExtensions: Extension[] = [
   {
     id: "core-extensions",
     name: "Core Extensions",
-    description: "Core extensions for the Nuco platform.",
+    description: "Core extensions for the Neuco platform.",
     version: "1.0.0",
     type: "api",
     author: {
-      name: "Nuco Team",
-      email: "team@nuco.dev",
+      name: "Neuco Team",
+      email: "team@neuco.dev",
     },
     isActive: true,
     isSystem: true,

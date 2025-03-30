@@ -40,6 +40,17 @@ export function getDefaultModel(preferences: AiSettings | null, fallback = 'gpt-
 }
 
 /**
+ * Safely get the selected model from AI preferences
+ * If no model is selected, falls back to the default model
+ * @param preferences The AI preferences object, which might be null
+ * @returns The selected model string or the default model if none is selected
+ */
+export function getSelectedModel(preferences: AiSettings | null): string {
+  if (!preferences) return 'gpt-3.5-turbo';
+  return preferences.selectedModel || preferences.defaultModel || 'gpt-3.5-turbo';
+}
+
+/**
  * Safely get the max tokens from AI preferences
  * @param preferences The AI preferences object, which might be null
  * @param fallback Optional fallback value if preferences are invalid

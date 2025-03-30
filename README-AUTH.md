@@ -1,6 +1,6 @@
-# Authentication Setup for Nuco-App
+# Authentication Setup for Neuco-App
 
-This document provides instructions for setting up authentication in Nuco-App, including NextAuth configuration, email/password authentication, and OAuth providers.
+This document provides instructions for setting up authentication in Neuco-App, including NextAuth configuration, email/password authentication, and OAuth providers.
 
 ## NextAuth Setup
 
@@ -9,8 +9,8 @@ This document provides instructions for setting up authentication in Nuco-App, i
 Add the following to your `.env` file:
 
 ```
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your-nextauth-secret
+AUTH_URL=http://localhost:3000
+AUTH_SECRET=your-nextauth-secret
 ```
 
 For production, set `NEXTAUTH_URL` to your production URL and generate a secure random string for `NEXTAUTH_SECRET`.
@@ -42,7 +42,7 @@ Replace the values with your SMTP server details. This is used for:
 Ensure your database is properly configured in `.env`:
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nuco
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/neuco
 ```
 
 NextAuth uses this database to store:
@@ -75,8 +75,8 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 2. Navigate to Setup > Apps > App Manager
 3. Click "New Connected App"
 4. Fill in the required fields:
-   - Connected App Name: Nuco-App
-   - API Name: Nuco_App
+   - Connected App Name: Neuco-App
+   - API Name: Neuco_App
    - Contact Email: your email
 5. Enable OAuth Settings
 6. Set the callback URL (e.g., `http://localhost:3000/api/auth/callback/salesforce`)

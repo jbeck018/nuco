@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { 
-  Menu, X, Home, MessageSquare, Settings, LogOut, 
-  Layers, Key, Code, FileText, ChevronRight, ChevronLeft 
+  Menu, X, MessageSquare, Settings, LogOut, 
+  Layers, Key, Code, FileText, ChevronRight, ChevronLeft, 
+  Home
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -33,25 +34,16 @@ export function MainNav({ children }: MainNavProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const { toast } = useToast();
   
-  const isAuthenticated = status === "authenticated";
+  const isAuthenticated = !!session?.user;
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                           pathname.startsWith('/chat') || 
                           pathname.startsWith('/settings') || 
                           pathname.startsWith('/integrations') ||
                           pathname.startsWith('/api-tokens') ||
                           pathname.startsWith('/chat-templates');
-  
-  // Redirect unauthenticated users from dashboard routes to login
-  useEffect(() => {
-    if (isDashboardRoute && status === "unauthenticated") {
-      console.log("Redirecting unauthenticated user from protected route:", pathname);
-      const callbackUrl = encodeURIComponent(pathname);
-      router.push(`/auth/login?callbackUrl=${callbackUrl}`);
-    }
-  }, [isDashboardRoute, status, pathname, router]);
   
   // Set sidebar state based on screen size
   useEffect(() => {
@@ -69,11 +61,6 @@ export function MainNav({ children }: MainNavProps) {
   }, []);
   
   const navItems: NavItem[] = [
-    {
-      title: "Home",
-      href: "/",
-      icon: <Home className="h-5 w-5" />,
-    },
     {
       title: "Dashboard",
       href: "/dashboard",
@@ -148,8 +135,8 @@ export function MainNav({ children }: MainNavProps) {
         description: "You have been signed out of your account.",
       });
       
-      // Redirect to home page after sign out
-      router.push('/');
+      // Redirect to login page after sign out
+      router.push('/auth/login');
     } catch (error) {
       console.error("Sign out error:", error);
       toast({
@@ -169,7 +156,7 @@ export function MainNav({ children }: MainNavProps) {
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
               <div className="flex items-center space-x-2">
-                <span className="text-xl font-bold">Nuco</span>
+                <span className="text-xl font-bold">Neuco</span>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -227,11 +214,11 @@ export function MainNav({ children }: MainNavProps) {
     return (
       <div className="flex flex-col h-screen overflow-hidden">
         {/* Top navigation bar */}
-        <nav className="border-b bg-background z-10">
+        <nav className="border-b bg-background z-10 h-14">
           <div className="w-full flex items-center justify-between px-4 py-3">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
-                <span className="text-xl font-bold">Nuco</span>
+              <Link href={isAuthenticated ? "/dashboard" : "/auth/login"} className="flex items-center space-x-2">
+                <span className="text-xl font-bold">Neuco</span>
               </Link>
             </div>
             
@@ -309,7 +296,7 @@ export function MainNav({ children }: MainNavProps) {
           {/* Sidebar */}
           <aside
             className={cn(
-              "border-r bg-background transition-all duration-300 ease-in-out",
+              "border-r bg-background transition-all duration-300 ease-in-out h-[calc(100vh-3.5rem)]",
               sidebarCollapsed ? "w-16" : "w-64"
             )}
           >
@@ -352,8 +339,8 @@ export function MainNav({ children }: MainNavProps) {
           </aside>
           
           {/* Main content */}
-          <div className="flex-1 transition-all duration-300 ease-in-out">
-            <main className="md:pl-0">
+          <div className="flex-1 overflow-hidden transition-all duration-300 ease-in-out">
+            <main className="h-[calc(100vh-3.5rem)] overflow-auto md:pl-0">
               <DashboardShell>  
                 {children}
               </DashboardShell>
@@ -366,12 +353,12 @@ export function MainNav({ children }: MainNavProps) {
   
   // Regular navigation for non-dashboard routes
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <nav className="border-b bg-background">
         <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <span className="text-xl font-bold">Nuco</span>
+            <Link href={isAuthenticated ? "/dashboard" : "/auth/login"} className="flex items-center space-x-2">
+              <span className="text-xl font-bold">Neuco</span>
             </Link>
           </div>
           
@@ -485,7 +472,9 @@ export function MainNav({ children }: MainNavProps) {
           </div>
         )}
       </nav>
-      {children}
-    </>
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+    </div>
   );
 } 

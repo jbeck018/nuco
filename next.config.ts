@@ -40,11 +40,14 @@ const nextConfig: NextConfig = {
   // Configure environment variables for Edge Runtime
   env: {
     // Application Configuration
+    PORT: '3000',
+    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 
     // NextAuth Configuration
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXT_AUTH_SECRET: process.env.AUTH_SECRET,
+    AUTH_SECRET: process.env.AUTH_SECRET,
 
     // Database Configuration
     DATABASE_URL: process.env.DATABASE_URL,
@@ -131,8 +134,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-if (process.env.NODE_ENV === 'development') {
-  await setupDevPlatform();
-}
+// if (process.env.NODE_ENV === 'development') {
+//   setupDevPlatform();
+// }
 
 export default nextConfig;

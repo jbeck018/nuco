@@ -1,10 +1,10 @@
 # Metadata Hooks Documentation
 
-This document provides information about the metadata hooks available in the Nuco App for managing user preferences, organization settings, and integration settings.
+This document provides information about the metadata hooks available in the Neuco App for managing user preferences, organization settings, and integration settings.
 
 ## Overview
 
-Nuco App includes a set of hooks for managing various types of settings and preferences with optimistic UI updates. These hooks provide a convenient interface for reading and updating settings, with built-in error handling and toast notifications.
+Neuco App includes a set of hooks for managing various types of settings and preferences with optimistic UI updates. These hooks provide a convenient interface for reading and updating settings, with built-in error handling and toast notifications.
 
 ## Available Hooks
 
@@ -226,7 +226,7 @@ function IntegrationSettingsPage({ integrationId }) {
           value={syncSettings.syncDirection} 
           onChange={e => setSyncDirection(e.target.value as 'oneway' | 'bidirectional')}
         >
-          <option value="oneway">One-way (Nuco → Integration)</option>
+          <option value="oneway">One-way (Neuco → Integration)</option>
           <option value="bidirectional">Bidirectional</option>
         </select>
       </div>

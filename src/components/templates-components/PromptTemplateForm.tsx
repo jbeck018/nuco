@@ -93,7 +93,7 @@ export default function PromptTemplateForm({
         // This is a placeholder - you'll need to implement the API endpoint
         const response = await fetch("/api/organizations");
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as { id: string; name: string }[];
           setOrganizations(data);
         }
       } catch (error) {

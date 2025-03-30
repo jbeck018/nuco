@@ -30,6 +30,17 @@ export interface AiSettings {
     includeOrganizationData: boolean;
     contextWindowSize: number;
   };
+  customTokens?: {
+    openai?: string;
+    anthropic?: string;
+    google?: string;
+  };
+  useCustomTokens?: boolean;
+  usageLimit?: {
+    monthlyTokenLimit: number;
+    currentMonthUsage?: number;
+    resetDate?: string;
+  };
 }
 
 export interface OrganizationSettings {
@@ -76,7 +87,6 @@ export const useOrganizationSettings = (organizationId: string) => {
       if (previousData) {
         queryClient.setQueryData(
           trpc.metadata.getOrganizationSettings.queryKey({ organizationId }),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (input: any) => {
             // Cast input to OrganizationSettings
             const oldData = input as OrganizationSettings | undefined;
@@ -190,6 +200,80 @@ export const useOrganizationSettings = (organizationId: string) => {
     });
   }, [organizationId, settings, updateMutation]);
 
+  // Convenience method for updating custom API tokens
+  const setCustomTokens = useCallback((customTokens: {
+    openai?: string;
+    anthropic?: string;
+    google?: string;
+  }) => {
+    const currentSettings = settings as OrganizationSettings | undefined;
+    const currentAiSettings = currentSettings?.aiSettings || {
+      defaultModel: '',
+      maxTokensPerRequest: 0,
+      promptTemplates: []
+    };
+    
+    const currentCustomTokens = currentAiSettings.customTokens || {};
+    
+    updateMutation.mutate({
+      organizationId,
+      aiSettings: {
+        ...currentAiSettings,
+        customTokens: {
+          ...currentCustomTokens,
+          ...customTokens
+        }
+      },
+    });
+  }, [organizationId, settings, updateMutation]);
+
+  // Convenience method for toggling the use of custom tokens
+  const setUseCustomTokens = useCallback((useCustomTokens: boolean) => {
+    const currentSettings = settings as OrganizationSettings | undefined;
+    const currentAiSettings = currentSettings?.aiSettings || {
+      defaultModel: '',
+      maxTokensPerRequest: 0,
+      promptTemplates: []
+    };
+    
+    updateMutation.mutate({
+      organizationId,
+      aiSettings: {
+        ...currentAiSettings,
+        useCustomTokens
+      },
+    });
+  }, [organizationId, settings, updateMutation]);
+
+  // Convenience method for updating token usage limits
+  const setTokenUsageLimit = useCallback((usageLimit: {
+    monthlyTokenLimit?: number;
+    currentMonthUsage?: number;
+    resetDate?: string;
+  }) => {
+    const currentSettings = settings as OrganizationSettings | undefined;
+    const currentAiSettings = currentSettings?.aiSettings || {
+      defaultModel: '',
+      maxTokensPerRequest: 0,
+      promptTemplates: []
+    };
+    
+    const currentUsageLimit = currentAiSettings.usageLimit || {
+      monthlyTokenLimit: 1000000 // Default to 1M tokens
+    };
+    
+    updateMutation.mutate({
+      organizationId,
+      aiSettings: {
+        ...currentAiSettings,
+        usageLimit: {
+          ...currentUsageLimit,
+          ...usageLimit
+        }
+      },
+    });
+  }, [organizationId, settings, updateMutation]);
+
   return {
     // Data
     settings: settings as OrganizationSettings | undefined,
@@ -208,6 +292,9 @@ export const useOrganizationSettings = (organizationId: string) => {
     setSlackWebhookUrl,
     setSlackNotifications,
     setAiSettings,
+    setCustomTokens,
+    setUseCustomTokens,
+    setTokenUsageLimit,
     
     // Computed properties for convenience
     memberDefaultRole: (settings as OrganizationSettings | undefined)?.memberDefaultRole || 'member',

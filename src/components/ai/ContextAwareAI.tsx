@@ -14,7 +14,7 @@ import {
   validateAndNormalizeAiSettings
 } from '@/lib/utils/ai-utils';
 import { applyContextAwarePrompting } from '@/lib/ai/context-aware';
-import { generateCompletion } from '@/lib/ai/service';
+import { generateClientCompletion } from '@/lib/ai/client-service';
 import { streamToString } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -47,6 +47,18 @@ export interface ContextAwareAIProps {
   };
   onMessageSent?: (message: Message) => void;
   onResponseReceived?: (message: Message) => void;
+}
+
+/**
+ * Custom streamToString function for our client service
+ */
+async function clientStreamToString(stream: any, onChunk: (chunk: string) => void): Promise<string> {
+  let result = '';
+  for await (const chunk of stream) {
+    result += chunk;
+    onChunk(chunk);
+  }
+  return result;
 }
 
 export function ContextAwareAI({
@@ -105,8 +117,9 @@ export function ContextAwareAI({
         }
       });
       
-      // Generate completion with proper error handling
-      const completionStream = await generateCompletion(
+      // Generate completion with proper error handling using client-side service
+      // This routes through our server API instead of directly calling AI providers
+      const completionStream = await generateClientCompletion(
         contextAwareMessages,
         {
           modelId: getDefaultModel(aiPreferences),
@@ -114,12 +127,12 @@ export function ContextAwareAI({
         }
       );
       
-      if (!completionStream) {
+      if (!completionStream || !completionStream.textStream) {
         throw new Error('Failed to generate AI response');
       }
       
       // Process the streaming response
-      await streamToString(completionStream, (chunk: string) => {
+      const fullResponse = await clientStreamToString(completionStream.textStream, (chunk: string) => {
         setResponse(prev => prev + chunk);
       });
       

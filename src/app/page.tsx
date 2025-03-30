@@ -1,43 +1,42 @@
-import { Suspense } from "react";
-import { StaticPricing } from "@/components/home/static-pricing";
-import { DynamicFeatures } from "@/components/home/dynamic-features";
-import { DynamicTestimonials } from "@/components/home/dynamic-testimonials";
-import { StaticFeatures } from "@/components/home/static-features";
-import { StaticHero } from "@/components/home/static-hero";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
-// Enable PPR for this page
-export const dynamic = 'force-static';
-export const runtime = 'nodejs';
+export default async function HomePage() {
+  const session = await auth();
 
-// Static metadata for the page
-export const metadata = {
-  title: 'Nuco - AI-Powered Integrations for Your Business Tools',
-  description: 'Nuco seamlessly connects your business tools with AI capabilities, enhancing productivity and unlocking new insights.',
-};
+  // If user is authenticated, redirect to dashboard
+  if (session?.user) {
+    redirect("/dashboard");
+  }
 
-export default function Home() {
+  // Show landing page for unauthenticated users
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-1">
-        {/* Static Hero Section - Pre-rendered */}
-        <StaticHero />
+    <div className="flex min-h-screen flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-3xl space-y-8 text-center">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
+            Welcome to Neuco
+          </h1>
+          <p className="mt-6 text-lg leading-8 text-muted-foreground">
+            Your AI-powered platform for seamless integration and automation.
+          </p>
+        </div>
         
-        {/* Static Features Section - Pre-rendered */}
-        <StaticFeatures />
-        
-        {/* Dynamic Features Section - Rendered on demand */}
-        <Suspense fallback={<div className="py-20 text-center">Loading features...</div>}>
-          <DynamicFeatures />
-        </Suspense>
-        
-        {/* Dynamic Testimonials Section - Rendered on demand */}
-        <Suspense fallback={<div className="py-20 text-center">Loading testimonials...</div>}>
-          <DynamicTestimonials />
-        </Suspense>
-        
-        {/* Static Pricing Section - Pre-rendered */}
-        <StaticPricing />
-      </main>
+        <div className="mt-10 flex items-center justify-center gap-x-6">
+          <Button asChild size="lg">
+            <Link href="/auth/login">
+              Get Started
+            </Link>
+          </Button>
+          <Button variant="outline" size="lg" asChild>
+            <Link href="/about">
+              Learn More
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
-}
+} 

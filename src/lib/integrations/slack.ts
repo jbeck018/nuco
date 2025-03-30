@@ -309,7 +309,7 @@ export class SlackIntegration implements Integration {
       throw new Error(`Slack API error: ${response.statusText}`);
     }
     
-    const result = await response.json();
+    const result = await response.json() as SlackApiResponse;
     
     if (!result.ok) {
       throw new Error(`Slack API error: ${result.error || 'Unknown error'}`);

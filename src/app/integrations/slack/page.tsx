@@ -34,7 +34,7 @@ export default function SlackIntegrationPage() {
       if (!response.ok) {
         throw new Error("Failed to fetch integrations");
       }
-      const data = await response.json();
+      const data = await response.json() as Integration[];
       setIntegrations(data);
     } catch (error) {
       console.error("Error fetching integrations:", error);
@@ -64,7 +64,7 @@ export default function SlackIntegrationPage() {
         throw new Error("Failed to initiate Slack connection");
       }
       
-      const { url } = await response.json();
+      const { url } = await response.json() as Record<string, any>;
       window.location.href = url;
     } catch (error) {
       console.error("Error connecting to Slack:", error);
@@ -120,24 +120,24 @@ export default function SlackIntegrationPage() {
           <CardHeader>
             <CardTitle>About Slack Integration</CardTitle>
             <CardDescription>
-              Connect your Slack workspace to use the Nuco bot for AI chat and prompt templates.
+              Connect your Slack workspace to use the Neuco bot for AI chat and prompt templates.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Features:</h3>
               <ul className="list-disc pl-5 space-y-2">
-                <li>Chat with AI directly from Slack using <code>/nuco chat</code> command</li>
-                <li>Access and use your prompt templates with <code>/nuco templates</code></li>
-                <li>Get help and information with <code>/nuco help</code></li>
+                <li>Chat with AI directly from Slack using <code>/neuco chat</code> command</li>
+                <li>Access and use your prompt templates with <code>/neuco templates</code></li>
+                <li>Get help and information with <code>/neuco help</code></li>
               </ul>
               
               <h3 className="text-lg font-medium mt-4">Setup Instructions:</h3>
               <ol className="list-decimal pl-5 space-y-2">
                 <li>Click the &quot;Connect Slack Workspace&quot; button above</li>
-                <li>Authorize the Nuco app in Slack</li>
-                <li>Once connected, invite the Nuco bot to your channels</li>
-                <li>Start using the <code>/nuco</code> commands</li>
+                <li>Authorize the Neuco app in Slack</li>
+                <li>Once connected, invite the Neuco bot to your channels</li>
+                <li>Start using the <code>/neuco</code> commands</li>
               </ol>
             </div>
           </CardContent>

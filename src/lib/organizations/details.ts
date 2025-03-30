@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { db } from '@/lib/db';
 import { organizations, organizationMembers } from '@/lib/db/schema';
 import { eq, count } from 'drizzle-orm';
+import { throwOrganizationNotFoundError } from '@/lib/auth/error-handler';
 
 /**
  * Get organization details
@@ -15,6 +16,7 @@ export const getOrganizationDetails = cache(async (organizationId: string) => {
       name: 'Unknown Organization',
       role: 'member',
       members: 0,
+      exists: false,
     };
   }
 
@@ -29,7 +31,15 @@ export const getOrganizationDetails = cache(async (organizationId: string) => {
       .where(eq(organizations.id, organizationId));
     
     if (!org) {
-      throw new Error(`Organization not found: ${organizationId}`);
+      // Instead of throwing an error, return a special response
+      console.warn(`Organization not found: ${organizationId}`);
+      return {
+        id: organizationId,
+        name: 'Organization Not Found',
+        role: 'member',
+        members: 0,
+        exists: false,
+      };
     }
     
     // Get member count
@@ -48,14 +58,19 @@ export const getOrganizationDetails = cache(async (organizationId: string) => {
       name: org.name,
       role,
       members: memberCount?.count || 0,
+      exists: true,
     };
   } catch (error) {
     console.error('Error fetching organization details:', error);
+    if (error instanceof Error && error.name === 'OrganizationAuthError') {
+      throw error;
+    }
     return {
       id: organizationId || 'org_default',
       name: 'Unknown Organization',
       role: 'member',
       members: 0,
+      exists: false,
     };
   }
 }); 

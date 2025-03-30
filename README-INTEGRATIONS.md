@@ -1,17 +1,17 @@
-# Third-Party Integrations Setup for Nuco-App
+# Third-Party Integrations Setup for Neuco-App
 
-This document provides instructions for setting up third-party integrations in Nuco-App, including Salesforce, HubSpot, Google, and Slack.
+This document provides instructions for setting up third-party integrations in Neuco-App, including Salesforce, HubSpot, Google, and Slack.
 
 ## Overview
 
-Nuco-App supports integrations with various third-party services to enhance functionality and provide a seamless experience for users. These integrations allow organizations to connect their existing tools and workflows with Nuco-App.
+Neuco-App supports integrations with various third-party services to enhance functionality and provide a seamless experience for users. These integrations allow organizations to connect their existing tools and workflows with Neuco-App.
 
 ## Prerequisites
 
 Before setting up integrations, ensure you have:
 
-1. A running instance of Nuco-App
-2. Admin access to your organization in Nuco-App
+1. A running instance of Neuco-App
+2. Admin access to your organization in Neuco-App
 3. Developer accounts for the services you want to integrate
 4. Proper environment variables configured in your `.env` file
 
@@ -23,8 +23,8 @@ Before setting up integrations, ensure you have:
 2. Navigate to Setup > Apps > App Manager
 3. Click "New Connected App"
 4. Fill in the required fields:
-   - Connected App Name: Nuco-App
-   - API Name: Nuco_App
+   - Connected App Name: Neuco-App
+   - API Name: Neuco_App
    - Contact Email: your email
 5. Enable OAuth Settings
 6. Set the callback URL: `https://your-app-domain.com/api/integrations/salesforce/callback`
@@ -120,11 +120,11 @@ SLACK_CLIENT_SECRET=your-slack-client-secret
 SLACK_SIGNING_SECRET=your-slack-signing-secret
 ```
 
-## Using Integrations in Nuco-App
+## Using Integrations in Neuco-App
 
 ### Connecting an Integration
 
-1. Log in to Nuco-App
+1. Log in to Neuco-App
 2. Navigate to your organization settings
 3. Go to the "Integrations" tab
 4. Select the integration you want to connect
@@ -169,7 +169,7 @@ To debug integration issues:
 
 ## Security Considerations
 
-1. **Data Privacy**: Be mindful of what data is shared between Nuco-App and integrated services.
+1. **Data Privacy**: Be mindful of what data is shared between Neuco-App and integrated services.
 
 2. **Token Storage**: Ensure that access tokens and refresh tokens are securely stored.
 

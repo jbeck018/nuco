@@ -23,7 +23,7 @@ export interface SyncSettings {
   fields?: string[];
   excludedFields?: string[];
   syncDirection?: 'oneway' | 'bidirectional';
-  conflictResolution?: 'newest' | 'manual' | 'integration' | 'nuco';
+  conflictResolution?: 'newest' | 'manual' | 'integration' | 'neuco';
 }
 
 export interface WebhookSettings {
@@ -179,7 +179,7 @@ export const useIntegrationSettings = (integrationId: string) => {
   }, [setSyncSettings]);
 
   // Convenience method for updating conflict resolution strategy
-  const setConflictResolution = useCallback((conflictResolution: 'newest' | 'manual' | 'integration' | 'nuco') => {
+  const setConflictResolution = useCallback((conflictResolution: 'newest' | 'manual' | 'integration' | 'neuco') => {
     setSyncSettings({ conflictResolution });
   }, [setSyncSettings]);
 

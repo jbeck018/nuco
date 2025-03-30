@@ -1,14 +1,47 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSlackIntegration } from '@/lib/integrations/slack';
 import { db } from '@/lib/db';
-import { OpenAI } from 'openai';
+import { AIServiceError } from '@/lib/ai/error';
+import { StreamTextResult, ToolSet } from 'ai';
+import { AgentFactory } from '@/lib/ai/agents/factory';
+import { Message } from '@/lib/ai/service';
+import { AgentContext } from '@/lib/ai/agents/base';
+import { AIService } from '@/lib/ai/service';
 
-// Create OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Custom function to convert StreamTextResult to string
+ * This is needed because StreamTextResult doesn't implement AsyncIterable<string> directly
+ * and we need to parse the special format of the LLM responses
+ */
+async function streamTextResultToString(stream: StreamTextResult<ToolSet, never>): Promise<string> {
+  let result = '';
+  
+  // Use the built-in toDataStream method to get a ReadableStream
+  const dataStream = stream.toDataStream();
+  
+  // Create a reader from the stream
+  const reader = dataStream.getReader();
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        break;
+      }
+      
+      // Decode the chunk and add it to the result
+      const chunk = new TextDecoder().decode(value);
+      result += chunk;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  
+  return result;
+}
 
 /**
  * Handle POST requests for Slack chat commands
@@ -16,7 +49,8 @@ const openai = new OpenAI({
  */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const { message, channelId, threadTs, integrationId } = await request.json();
+    const body = await request.json() as Record<string, any>;
+    const { message, channelId, threadTs, integrationId, organizationId } = body;
     
     if (!message) {
       return NextResponse.json(
@@ -43,6 +77,22 @@ export async function POST(request: NextRequest): Promise<Response> {
         { error: 'Slack integration not found' },
         { status: 404 }
       );
+    }
+    
+    // Get the organization ID from the integration if not provided
+    const orgId = organizationId || integration.organizationId;
+    
+    // Check if the organization has custom tokens enabled
+    let useCustomTokens = false;
+    let customTokens = undefined;
+    
+    if (orgId) {
+      const orgSettings = await db.query.organizationSettings.findFirst({
+        where: (settings, { eq }) => eq(settings.organizationId, orgId),
+      });
+      
+      useCustomTokens = orgSettings?.aiSettings?.useCustomTokens || false;
+      customTokens = orgSettings?.aiSettings?.customTokens;
     }
     
     // Cast the config to the expected type
@@ -74,37 +124,101 @@ export async function POST(request: NextRequest): Promise<Response> {
       thread_ts: threadTs,
     });
     
-    // Generate a response using OpenAI
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful AI assistant integrated with Slack. Provide concise, accurate responses to user queries. Format your responses using Slack markdown when appropriate.',
+    try {
+      // Create agent factory
+      const agentFactory = AgentFactory.getInstance({
+        defaultModelId: 'gpt-4',
+        defaultSystemPrompt: 'You are a helpful AI assistant integrated with Slack. Provide concise, accurate responses to user queries. Format your responses using Slack markdown when appropriate.',
+        metadata: {
+          organizationId: orgId,
         },
-        {
-          role: 'user',
-          content: message,
+      });
+
+      // Create a default agent
+      const agent = await agentFactory.createAgent('default', {
+        modelConfig: {
+          id: 'gpt-4',
+          name: 'GPT-4',
+          provider: 'openai',
+          contextWindow: 128000,
+          maxOutputTokens: 4096,
+          temperature: 0.7,
+          topP: 1,
+          frequencyPenalty: 0,
+          presencePenalty: 0,
+          costPer1kInput: 0.01,
+          costPer1kOutput: 0.03,
         },
-      ],
-      temperature: 0.7,
-    });
-    
-    // Get the response content
-    const responseContent = response.choices[0].message.content || 'No response generated';
-    
-    // Send the response to Slack
-    await slack.sendMessage({
-      channel: channelId,
-      text: responseContent,
-      thread_ts: threadTs,
-    });
-    
-    // Return a success response
-    return NextResponse.json({ success: true });
-    
+      });
+
+      // Convert message to the correct type
+      const messages: Message[] = [{
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: message,
+        createdAt: new Date(),
+      }];
+
+      // Create agent context
+      const context: AgentContext = {
+        messages,
+        state: {
+          id: crypto.randomUUID(),
+          status: 'running',
+          lastUpdated: new Date(),
+          metadata: {},
+        },
+        config: {
+          id: crypto.randomUUID(),
+          name: 'default',
+          description: 'Default agent for handling Slack messages',
+          model: 'gpt-4',
+          aiService: new AIService(),
+        },
+        metadata: {
+          channelId,
+          threadTs,
+          userId: config.bot_user_id as string,
+          teamId: config.team_id as string,
+        },
+        executionId: crypto.randomUUID(),
+      };
+
+      // Execute the agent
+      const result = await agent.execute(context);
+
+      // Send the response to Slack
+      await slack.sendMessage({
+        channel: channelId,
+        text: typeof result === 'string' ? result : 'No response generated',
+        thread_ts: threadTs,
+      });
+      
+      // Return a success response
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      console.error('Error processing message:', error);
+      
+      // Handle specific AI service errors
+      if (error instanceof AIServiceError) {
+        return NextResponse.json(
+          { 
+            error: error.message,
+            type: error.type,
+            code: error.code
+          },
+          { status: 500 }
+        );
+      }
+      
+      // Handle generic errors
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('Slack chat error:', error);
+    console.error('API route error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -113,7 +113,7 @@ export function OrganizationMembers() {
         throw new Error('Failed to fetch organization members');
       }
       
-      const result = await response.json();
+      const result = await response.json() as Record<string, any>;
       setMembers(result.result.data.json || []);
     } catch (error) {
       console.error('Error fetching members:', error);

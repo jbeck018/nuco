@@ -93,7 +93,7 @@ export default function SignupPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as Record<string, any>;
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to create account");

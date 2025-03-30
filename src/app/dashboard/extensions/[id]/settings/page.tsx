@@ -1,6 +1,6 @@
 "use client";
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { useState, use, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -134,7 +134,7 @@ export default function ExtensionSettingsPage(props: {
         throw new Error("Failed to fetch extension");
       }
       
-      const data = await response.json();
+      const data = await response.json() as Extension;
       setExtension(data);
       
       // Reset form with the extension settings values

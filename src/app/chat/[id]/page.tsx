@@ -5,7 +5,7 @@
  * It fetches the conversation data and renders the chat interface.
  */
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { use } from 'react';
 import { Metadata } from 'next';

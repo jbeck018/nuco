@@ -86,7 +86,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch integrations");
       }
       
-      const data = await response.json();
+      const data = await response.json() as Integration[];
       setIntegrations(data);
       
       // Select the first integration by default
@@ -120,7 +120,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch usage summary");
       }
       
-      const summaryData = await summaryResponse.json();
+      const summaryData = await summaryResponse.json() as UsageSummary;
       setUsageSummary(summaryData);
       
       // Fetch AI metrics
@@ -132,7 +132,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch AI metrics");
       }
       
-      const aiData = await aiResponse.json();
+      const aiData = await aiResponse.json() as AIPerformanceMetrics;
       setAIMetrics(aiData);
       
       // Fetch top users
@@ -144,7 +144,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch top users");
       }
       
-      const usersData = await usersResponse.json();
+      const usersData = await usersResponse.json() as UserActivity[];
       setTopUsers(usersData);
       
       // Fetch top channels
@@ -156,7 +156,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch top channels");
       }
       
-      const channelsData = await channelsResponse.json();
+      const channelsData = await channelsResponse.json() as ChannelActivity[];
       setTopChannels(channelsData);
       
       // Fetch event counts
@@ -168,7 +168,7 @@ export default function SlackAnalyticsDashboard() {
         throw new Error("Failed to fetch event counts");
       }
       
-      const eventsData = await eventsResponse.json();
+      const eventsData = await eventsResponse.json() as EventCounts;
       setEventCounts(eventsData);
       
       setLoading(false);

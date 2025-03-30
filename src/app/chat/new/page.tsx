@@ -4,7 +4,7 @@
  * This page creates a new chat conversation and redirects to it.
  */
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';

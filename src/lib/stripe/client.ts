@@ -19,7 +19,7 @@ if (!STRIPE_SECRET_KEY) {
 export const stripe = new Stripe(STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-02-24.acacia', // Specify the Stripe API version
   appInfo: {
-    name: 'Nuco-App',
+    name: 'Neuco-App',
     version: '0.1.0',
   },
 });

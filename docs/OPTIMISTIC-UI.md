@@ -1,6 +1,6 @@
 # Optimistic UI Updates
 
-This document explains the optimistic UI update pattern implemented in the Nuco-App to provide immediate feedback for user actions.
+This document explains the optimistic UI update pattern implemented in the Neuco-App to provide immediate feedback for user actions.
 
 ## Overview
 
