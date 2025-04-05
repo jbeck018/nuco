@@ -4,7 +4,7 @@
  * This page demonstrates the use of OpenAI function calling.
  */
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { Metadata } from 'next';
 import { auth } from '@/lib/auth';

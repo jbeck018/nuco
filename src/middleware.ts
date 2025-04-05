@@ -12,6 +12,7 @@ const protectedRoutes = [
   "/settings",
   "/api/chat",
   "/api/integrations",
+  "/api-tokens",
 ];
 
 // Define auth routes that should redirect to dashboard if already authenticated
@@ -34,7 +35,8 @@ const publicRoutes = [
   "/_next",
   "/favicon.ico",
   "/robots.txt",
-  "/sitemap.xml"
+  "/sitemap.xml",
+  "/api/auth" // Add auth API routes to public routes
 ];
 
 // Define landing page routes that should redirect to dashboard when authenticated
@@ -68,42 +70,55 @@ function getCacheSettings(pathname: string): string {
   return "public, max-age=0, must-revalidate";
 }
 
-// Helper function to check if a path matches any of the routes in the array
+// Helper function to check if a path matches any of the route patterns
 function matchesAnyRoute(pathname: string, routes: string[]): boolean {
-  return routes.some(route => 
-    pathname === route || 
-    pathname.startsWith(`${route}/`)
-  );
+  return routes.some(route => pathname.startsWith(route));
 }
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  
+  // Skip middleware for public routes and static assets
+  if (matchesAnyRoute(pathname, publicRoutes) || matchesAnyRoute(pathname, staticAssetPaths)) {
+    return NextResponse.next();
+  }
+
+  // Get user from request
   const user = await getUserFromRequest(request);
   const isAuthenticated = !!user;
 
-  // Handle root route redirection
-  if (pathname === "/") {
-    if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    } else {
-      return NextResponse.redirect(new URL("/auth/login", request.url));
-    }
-  }
+  // console.log("user", user);
+  // console.log("request", request);
+  // console.log("isAuthenticated", isAuthenticated);
 
   // Handle protected routes
-  if (matchesAnyRoute(pathname, protectedRoutes) && !isAuthenticated) {
-    const callbackUrl = encodeURIComponent(pathname);
-    return NextResponse.redirect(new URL(`/auth/login?callbackUrl=${callbackUrl}`, request.url));
+  if (matchesAnyRoute(pathname, protectedRoutes)) {
+    // if (!isAuthenticated) {
+    //   const callbackUrl = encodeURIComponent(pathname);
+    //   return NextResponse.redirect(new URL(`/auth/login?callbackUrl=${callbackUrl}`, request.url));
+    // }
+    return NextResponse.next();
   }
 
-  // Handle auth routes redirection for authenticated users
-  if (matchesAnyRoute(pathname, authRoutes) && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // Handle auth routes
+  if (matchesAnyRoute(pathname, authRoutes)) {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
   }
 
-  // Handle landing routes redirection for authenticated users
-  if (matchesAnyRoute(pathname, landingRoutes) && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // Handle landing routes
+  if (matchesAnyRoute(pathname, landingRoutes)) {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Handle root route - let the page component handle the logic
+  if (pathname === "/") {
+    return NextResponse.next();
   }
 
   // Apply rate limiting
@@ -132,7 +147,7 @@ export async function middleware(request: NextRequest) {
     `edge;dur=${endTime - startTime};desc="Edge Middleware"`
   );
   
-  // CASE 4: If the user is authenticated and trying to access an organization route
+  // If the user is authenticated and trying to access an organization route
   if (user && pathname.startsWith('/org')) {
     // Extract the organization slug from the URL
     const orgSlug = pathname.split('/')[2];

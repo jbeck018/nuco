@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -29,7 +29,7 @@ interface SlackBlock {
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const { integrationId } = await request.json();
+    const { integrationId } = await request.json() as Record<string, any>;
 
     // Get the Slack integration from the database
     const integration = integrationId

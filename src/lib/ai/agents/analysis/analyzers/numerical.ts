@@ -185,7 +185,7 @@ export class NumericalAnalyzer extends BaseAgent {
         });
         const url = await getSignedUrl(this.r2Client, getCommand, { expiresIn: 3600 });
         const response = await fetch(url);
-        const data = await response.json();
+        const data = await response.json() as unknown[];
 
         // Filter and transform data based on query
         const filteredData = data.filter((item: unknown) => {

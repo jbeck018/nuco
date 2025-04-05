@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -7,6 +7,7 @@ import {
   listUserPromptTemplates,
   listOrganizationPromptTemplates,
   promptTemplateSchema,
+  PromptTemplate,
 } from "@/lib/ai/templates";
 import { z } from "zod";
 
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Parse the request body
-    const body = await request.json();
+    const body = await request.json() as PromptTemplate;
 
     // Validate the request body
     const validatedData = promptTemplateSchema.parse({

@@ -4,7 +4,7 @@
  * This page displays a list of all chat conversations and allows starting a new one.
  */
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 import { Metadata } from 'next';
 import Link from 'next/link';
