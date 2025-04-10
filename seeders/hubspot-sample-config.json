@@ -1,0 +1,264 @@
+{
+  "organization": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "name": "Test Organization"
+  },
+  
+  "hubspot": {
+    "useEnvCredentials": true,
+    "accessToken": null,
+    "refreshToken": null,
+    "clientId": null,
+    "clientSecret": null,
+    "scopes": [
+      "contacts", "crm.objects.contacts.read", "crm.objects.contacts.write",
+      "crm.objects.companies.read", "crm.objects.companies.write",
+      "crm.objects.deals.read", "crm.objects.deals.write",
+      "settings"
+    ]
+  },
+  
+  "storage": {
+    "baseDir": "./seeders/hubspot/data",
+    "format": "json",
+    "compression": false,
+    "createBackups": true
+  },
+  
+  "customProperties": {
+    "setup": true,
+    "properties": [
+      {
+        "name": "neuco_effective_date",
+        "label": "Neuco Effective Date",
+        "description": "The business effective date for this record's state",
+        "type": "datetime",
+        "fieldType": "date",
+        "groupName": "neuco_testing"
+      }
+    ]
+  },
+  
+  "timeSettings": {
+    "simulatedStartDate": "2024-01-01T00:00:00Z",
+    "simulatedEndDate": "2025-03-30T00:00:00Z",
+    "changePoints": 8,
+    "distributionType": "exponential"
+  },
+  
+  "volumeSettings": {
+    "companies": {
+      "count": 25,
+      "distribution": {
+        "size": {
+          "small": 40,
+          "medium": 35, 
+          "large": 20,
+          "enterprise": 5
+        },
+        "industry": {
+          "Technology": 25,
+          "Healthcare": 15,
+          "Finance": 20,
+          "Manufacturing": 10,
+          "Retail": 15,
+          "Education": 5,
+          "Consulting": 5,
+          "Media": 5
+        }
+      },
+      "changeFrequency": 30
+    },
+    
+    "contacts": {
+      "distribution": {
+        "byCompanySize": {
+          "small": {"min": 2, "max": 5},
+          "medium": {"min": 4, "max": 12},
+          "large": {"min": 10, "max": 25},
+          "enterprise": {"min": 20, "max": 50}
+        },
+        "byRole": {
+          "executive": 10,
+          "management": 30,
+          "individual": 60
+        }
+      },
+      "changeFrequency": 40
+    },
+    
+    "deals": {
+      "distribution": {
+        "byCompanySize": {
+          "small": {"min": 1, "max": 3},
+          "medium": {"min": 2, "max": 5},
+          "large": {"min": 3, "max": 8},
+          "enterprise": {"min": 5, "max": 15}
+        },
+        "byStage": {
+          "Qualification": 20,
+          "Meeting Scheduled": 15,
+          "Proposal": 25,
+          "Negotiation": 15,
+          "Closed Won": 15,
+          "Closed Lost": 10
+        }
+      },
+      "valueRanges": {
+        "small": {"min": 1000, "max": 10000},
+        "medium": {"min": 5000, "max": 25000},
+        "large": {"min": 20000, "max": 100000},
+        "enterprise": {"min": 50000, "max": 500000}
+      },
+      "changeFrequency": 50,
+      "progressionPatterns": [
+        {
+          "name": "FastClose",
+          "description": "Deals that move quickly through the pipeline",
+          "probability": 20,
+          "stageTransitionDays": {
+            "Qualification": {"min": 1, "max": 3},
+            "Meeting Scheduled": {"min": 1, "max": 5},
+            "Proposal": {"min": 2, "max": 7},
+            "Negotiation": {"min": 1, "max": 5}
+          }
+        },
+        {
+          "name": "StandardSales",
+          "description": "Normal sales cycle",
+          "probability": 60,
+          "stageTransitionDays": {
+            "Qualification": {"min": 5, "max": 14},
+            "Meeting Scheduled": {"min": 7, "max": 21},
+            "Proposal": {"min": 7, "max": 30},
+            "Negotiation": {"min": 7, "max": 21}
+          }
+        },
+        {
+          "name": "SlowBurn",
+          "description": "Long sales cycles",
+          "probability": 20,
+          "stageTransitionDays": {
+            "Qualification": {"min": 14, "max": 30},
+            "Meeting Scheduled": {"min": 21, "max": 45},
+            "Proposal": {"min": 30, "max": 60},
+            "Negotiation": {"min": 14, "max": 45}
+          }
+        }
+      ]
+    },
+    
+    "tickets": {
+      "distribution": {
+        "byPriority": {
+          "low": 30,
+          "medium": 45,
+          "high": 20,
+          "critical": 5
+        },
+        "byStatus": {
+          "New": 15,
+          "In Progress": 25,
+          "Waiting on Customer": 20,
+          "Resolved": 30,
+          "Closed": 10
+        }
+      },
+      "changeFrequency": 60
+    },
+    
+    "engagements": {
+      "distribution": {
+        "perContact": {"min": 2, "max": 15},
+        "perDeal": {"min": 3, "max": 20},
+        "byType": {
+          "notes": 30,
+          "tasks": 20,
+          "emails": 35,
+          "meetings": 10,
+          "calls": 5
+        }
+      }
+    }
+  },
+  
+  "changePatterns": {
+    "contacts": [
+      {
+        "name": "RoleChange",
+        "description": "Contact changes job title/role",
+        "frequency": 15,
+        "properties": ["jobtitle"]
+      },
+      {
+        "name": "InfoUpdate",
+        "description": "Contact details update",
+        "frequency": 30,
+        "properties": ["phone", "email", "address"]
+      },
+      {
+        "name": "CompanyTransfer",
+        "description": "Contact moves to different company",
+        "frequency": 5,
+        "association": "company"
+      }
+    ],
+    "companies": [
+      {
+        "name": "Growth",
+        "description": "Company size/revenue increases",
+        "frequency": 20,
+        "properties": ["numberofemployees", "annualrevenue"]
+      },
+      {
+        "name": "LocationChange",
+        "description": "Company changes address",
+        "frequency": 10,
+        "properties": ["address", "city", "state", "zip"]
+      }
+    ],
+    "deals": [
+      {
+        "name": "StageProgression",
+        "description": "Deal moves to next stage",
+        "frequency": 40,
+        "properties": ["dealstage"]
+      },
+      {
+        "name": "ValueAdjustment",
+        "description": "Deal amount changes",
+        "frequency": 25,
+        "properties": ["amount"]
+      },
+      {
+        "name": "StakeholderChange",
+        "description": "Deal contacts change",
+        "frequency": 15,
+        "association": "contacts"
+      }
+    ]
+  },
+  
+  "api": {
+    "batchSize": 25,
+    "rateLimitDelay": 200,
+    "maxConcurrent": 2,
+    "timeoutMs": 15000,
+    "maxRetries": 3,
+    "retryDelay": 1000
+  },
+  
+  "validation": {
+    "generateSnapshots": true,
+    "snapshotIntervals": ["daily", "weekly"],
+    "compareOnUpload": true,
+    "detailedDiffs": true
+  },
+  
+  "logging": {
+    "level": "info",
+    "file": "./seeders/hubspot/logs/seed.log",
+    "console": true,
+    "format": "json"
+  }
+}
